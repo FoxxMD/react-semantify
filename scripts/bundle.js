@@ -7,12 +7,14 @@ require('semantic-ui/dist/semantic.js');
 
 var React        = require('react/addons');
 var Sidebar      = require('../../src/components/Sidebar.jsx');
+var ForkRibbon   = require('../../src/components/GitHubForkRibbon.jsx');
 var RouteActions = require('../../src/actions/RouteActions.js');
 var App          = require('../../src/App.jsx');
 
 var pathName = location.hash.substring(2);
 
 React.render(React.createElement(Sidebar, null), document.getElementsByClassName('ui sidebar')[0]);
+React.render(React.createElement(ForkRibbon, null), document.getElementsByClassName('github fork ribbon')[0]);
 React.render(React.createElement(App, null), document.getElementsByClassName('pusher')[0]);
 
 RouteActions.updatePath(pathName);
@@ -22,7 +24,7 @@ $('.ui.launch.button').on('click', function () {
 });
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../../src/App.jsx":343,"../../src/actions/RouteActions.js":344,"../../src/components/Sidebar.jsx":347,"jquery":124,"react/addons":181,"semantic-ui/dist/semantic.js":342}],2:[function(require,module,exports){
+},{"../../src/App.jsx":352,"../../src/actions/RouteActions.js":353,"../../src/components/GitHubForkRibbon.jsx":356,"../../src/components/Sidebar.jsx":357,"jquery":124,"react/addons":190,"semantic-ui/dist/semantic.js":351}],2:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -20383,6 +20385,625 @@ return jQuery;
 }));
 
 },{}],125:[function(require,module,exports){
+'use strict';
+
+var ReactElement  = require('react/lib/ReactElement');
+var assign        = require("react/lib/Object.assign");
+
+var applyStyles   = require('./applyStyles');
+
+function buildProps(props) {
+  var builtProps = {
+    className: props.className || null,
+    style: props.style ? assign({}, props.style) : null,
+    styles: undefined
+  };
+  applyStyles(builtProps, props.styles);
+  return builtProps;
+}
+
+var originalCreateElement = ReactElement.createElement;
+ReactElement.createElement = function(type, props ) {for (var children=[],$__0=2,$__1=arguments.length;$__0<$__1;$__0++) children.push(arguments[$__0]);
+  if (props && typeof type === 'string') {
+    props = assign(props, buildProps(props));
+  }
+
+  return originalCreateElement.apply(this, [type, props].concat(children));
+};
+
+},{"./applyStyles":127,"react/lib/Object.assign":218,"react/lib/ReactElement":247}],126:[function(require,module,exports){
+'use strict';
+
+function Style(style, className, children) {
+  this.style = style;
+  this.className = className;
+  this.children = children;
+}
+
+Style.prototype.isCompiled = function() {
+  var registry = window.__ReactStyle__;
+  return registry && registry[this.className];
+};
+
+module.exports = Style;
+
+},{}],127:[function(require,module,exports){
+'use strict';
+
+var CSSProperty = require('react/lib/CSSProperty');
+var isArray     = Array.isArray;
+
+// TODO: Is this enough?
+var COMPLEX_OVERRIDES = CSSProperty.shorthandPropertyExpansions;
+
+function applyStyle(props, style, order) {
+  if (style === null || style === undefined || style === false) {
+    return order;
+  }
+  else if (style.isCompiled() && order < 10) {
+    if (!props.className) {
+      props.className = '';
+    }
+    for (var j = 0; j < order + 1; j++) {
+      props.className += ' ' + style.className + (j === 0 ? '' : j);
+    }
+    if (props.style) {
+      for (var k in style.style) {
+        if (props.style[k] !== null || props.style[k] !== undefined) {
+          props.style[k] = null;
+          var complexOverride = COMPLEX_OVERRIDES[k];
+          if (complexOverride) {
+            for (k in complexOverride) {
+              if (props.style[k] !== null || props.style[k] !== undefined) {
+                props.style[k] = null;
+              }
+            }
+          }
+        }
+      }
+    }
+    return order + 1;
+  }
+  else {
+    if (!props.style) {
+      props.style = {};
+    }
+    for (var key in style.style) {
+      if (!style.style.hasOwnProperty(key)) {
+        continue;
+      }
+      props.style[key] = style.style[key];
+    }
+    return order;
+  }
+}
+
+function applyStyles(props, styles, order) {
+  if (order === undefined) {
+    order = 0;
+  }
+  if (isArray(styles)) {
+    for (var i = 0, len = styles.length; i < len; i++) {
+      order = applyStyles(props, styles[i], order);
+    }
+    return order;
+  }
+  else {
+    return applyStyle(props, styles, order);
+  }
+}
+
+module.exports = applyStyles;
+
+},{"react/lib/CSSProperty":194}],128:[function(require,module,exports){
+'use strict';
+
+require('./ReactElementExtended');
+
+var ExecutionEnvironment   = require('react/lib/ExecutionEnvironment');
+var Style                  = require('./Style');
+var stylesToCSS            = require('./stylesToCSS');
+var styleComponent         = require('./styleComponent');
+var styleComponentChildren = require('./styleComponentChildren');
+
+var assign                 = require("react/lib/Object.assign");
+
+var isArray = Array.isArray;
+
+
+var styles = [];
+var captureStyles = true;
+var counter = 0;
+
+function genClassName() {
+  counter += 1;
+  return 'c' + counter + '_';
+}
+
+function createStyle(props, className) {
+  className = className || genClassName();
+
+  var children = {};
+  var style = {};
+
+  for (var key in props) {
+    if (!props.hasOwnProperty(key)) {
+      continue;
+    }
+
+    var value = props[key];
+    if (typeof value === 'object' && !isArray(value)) {
+      if (value instanceof Style) {
+        children[key] = value;
+      } else {
+        children[key] = ReactStyle.create(
+          value,
+          className ? className + '__' + key : null);
+      }
+    } else {
+      style[key] = props[key];
+    }
+  }
+
+  var styleDecl = new Style(style, className, children);
+  if (captureStyles) {
+    styles.push(styleDecl);
+  }
+  return styleDecl;
+}
+
+
+var ReactStyle = {
+
+  create: createStyle,
+  style: styleComponent,
+  styleChildren: styleComponentChildren,
+
+  compile: function() {
+    return stylesToCSS(styles);
+  },
+
+  inject: function() {
+    captureStyles = false;
+    if (!ExecutionEnvironment.canUseDOM ||
+      window.__ReactStyle__ !== undefined) {
+      // We are in Node or Styles are already injected
+      return;
+    }
+    var tag = document.createElement('style');
+    var compiled = this.compile();
+    tag.innerHTML = compiled.css;
+    window.__ReactStyle__ = compiled.classNames;
+    document.getElementsByTagName('head')[0].appendChild(tag);
+  }
+};
+
+assign(createStyle, ReactStyle);
+
+module.exports = createStyle;
+
+},{"./ReactElementExtended":125,"./Style":126,"./styleComponent":129,"./styleComponentChildren":130,"./stylesToCSS":131,"react/lib/ExecutionEnvironment":212,"react/lib/Object.assign":218}],129:[function(require,module,exports){
+'use strict';
+
+var cloneWithProps         = require('react/lib/cloneWithProps');
+var styleComponentChildren = require('./styleComponentChildren');
+
+function styleComponent(styles, component) {
+  var componentStyles = [].concat(component.props.styles || [], styles);
+  var children = component.props.children;
+  component = cloneWithProps(component, {
+    children: styleComponentChildren(styles, children),
+    styles:   componentStyles
+  });
+
+  return component;
+}
+
+module.exports = styleComponent;
+
+},{"./styleComponentChildren":130,"react/lib/cloneWithProps":303}],130:[function(require,module,exports){
+'use strict';
+
+var cloneWithProps = require('react/lib/cloneWithProps');
+var ReactChildren  = require('react/lib/ReactChildren');
+
+function styleComponentChildren(styles, children) {
+  var childrenStyles = [];
+  var firstChildStyles = [];
+  var lastChildStyles = [];
+
+  if (!Array.isArray(styles)) {
+    styles = [styles];
+  }
+
+  for (var i = 0, len = styles.length; i < len; i++) {
+    if (!styles[i] || !styles[i].children) {
+      continue;
+    }
+    if (styles[i].children.children) {
+      childrenStyles.push(styles[i].children.children);
+    }
+    if (styles[i].children.firstChild) {
+      firstChildStyles.push(styles[i].children.firstChild);
+    }
+    if (styles[i].children.lastChild) {
+      lastChildStyles.push(styles[i].children.lastChild);
+    }
+  }
+
+  var length = ReactChildren.count(children);
+  var strings = 0;
+  return ReactChildren.map(children, function(child, _idx) {
+    if (typeof child === 'string') {
+      strings++;
+      return child;
+    }
+    if (child === null) {
+      return null;
+    }
+
+    var idx = _idx - strings;
+    var childChildren = child.props.children;
+    if (idx === 0 && firstChildStyles.length > 0) {
+      child = cloneWithProps(
+        child,
+        {styles: [].concat(child.props.styles || [], firstChildStyles)}
+      );
+    }
+    else if (idx + strings === length - 1 && lastChildStyles.length > 0) {
+      child = cloneWithProps(
+        child,
+        {styles: [].concat(child.props.styles, lastChildStyles)}
+      );
+    }
+    else {
+      child = cloneWithProps(
+        child,
+        {styles: [].concat(child.props.styles, childrenStyles)}
+      );
+    }
+    return child;
+  });
+}
+
+module.exports = styleComponentChildren;
+
+},{"react/lib/ReactChildren":225,"react/lib/cloneWithProps":303}],131:[function(require,module,exports){
+'use strict';
+
+var hyphenateStyleName = require('react/lib/hyphenateStyleName');
+
+function buildRule(result, key, value) {
+  if (typeof value.toCSS === 'function') {
+    value = value.toCSS();
+  }
+  if (typeof value === 'number') {
+    value = '' + value + 'px';
+  }
+  // TODO: escape value
+  result.css += '  ' + hyphenateStyleName(key) + ': ' + value + ';\n';
+}
+
+function buildRules(result, rules, selector) {
+  if (Object.keys(rules).length === 0) {
+    return result;
+  }
+
+  result.css += selector + ' {\n';
+  for (var styleKey in rules) {
+    if (!rules.hasOwnProperty(styleKey)) {
+      continue;
+    }
+    var value = rules[styleKey];
+
+    if (Array.isArray(value)) {
+      for (var i = 0, len = value.length; i < len; i++) {
+        buildRule(result, styleKey, value[i]);
+      }
+    }
+    else {
+      buildRule(result, styleKey, value);
+    }
+  }
+  result.css += '}\n';
+
+  return result;
+}
+
+function replicateSelector(s) {
+  return [
+    s,
+      s + (s + 1),
+      s + (s + 1) + (s + 2),
+      s + (s + 1) + (s + 2) + (s + 3),
+      s + (s + 1) + (s + 2) + (s + 3) + (s + 4),
+      s + (s + 1) + (s + 2) + (s + 3) + (s + 4) + (s + 5),
+      s + (s + 1) + (s + 2) + (s + 3) + (s + 4) + (s + 5) + (s + 6),
+      s + (s + 1) + (s + 2) + (s + 3) + (s + 4) + (s + 5) + (s + 6) + (s + 7),
+      s + (s + 1) + (s + 2) + (s + 3) + (s + 4) + (s + 5) + (s + 6) + (s + 7) + (s + 8),
+      s + (s + 1) + (s + 2) + (s + 3) + (s + 4) + (s + 5) + (s + 6) + (s + 7) + (s + 8) + (s + 9)
+  ].join(',');
+}
+
+function buildStyle(result, style, selector) {
+  if (!style.className) {
+    return;
+  }
+
+  if (!selector && result.classNames[style.className]) {
+    return;
+  }
+
+  if (!selector) {
+    result.classNames[style.className] = true;
+    selector = replicateSelector('.' + style.className);
+  }
+
+  buildRules(result, style.style, selector);
+
+  if (style.children) {
+    for (var childKey in style.children) {
+      if (!style.children.hasOwnProperty(childKey)) {
+        continue;
+      }
+      var child = style.children[childKey];
+      if (childKey[0] === ':') {
+        var childSelector = selector.split(',')
+          .map(function(sel) {
+            return sel + childKey;
+          })
+          .join(',');
+        buildStyle(result, child, childSelector);
+      }
+      else {
+        buildStyle(result, child);
+      }
+    }
+  }
+}
+
+function stylesToCSS(styles) {
+  if (!Array.isArray(styles)) {
+    styles = [styles];
+  }
+
+  var result = {css: '', classNames: {}};
+  for (var i = 0, len = styles.length; i < len; i++) {
+    buildStyle(result, styles[i]);
+  }
+  return result;
+}
+
+module.exports = stylesToCSS;
+
+},{"react/lib/hyphenateStyleName":328}],132:[function(require,module,exports){
+(function (global){
+"use strict";
+
+var RibbonStyle = require('./ribbonStyle.js');
+var React = require('react/addons');
+
+var $__0=
+  
+  
+  RibbonStyle,GitHubForkRibbon=$__0.GitHubForkRibbon,GitHubForkRibbonWrapper=$__0.GitHubForkRibbonWrapper;
+
+module.exports = global.GitHubForkRibbon = React.createClass({displayName: "GitHubForkRibbon",
+
+  render: function () {
+
+    var $__0=     this.props,position=$__0.position,href=$__0.href,target=$__0.target,other=(function(source, exclusion) {var rest = {};var hasOwn = Object.prototype.hasOwnProperty;if (source == null) {throw new TypeError();}for (var key in source) {if (hasOwn.call(source, key) && !hasOwn.call(exclusion, key)) {rest[key] = source[key];}}return rest;})($__0,{position:1,href:1,target:1});
+
+    var ribbonStyle = [GitHubForkRibbon.baseStyle];
+    var wrapperStyle = [GitHubForkRibbonWrapper.baseStyle];
+    var position = '';
+
+    switch(this.props.position) {
+
+      case 'left':
+        ribbonStyle.push(GitHubForkRibbon.leftStyle);
+        wrapperStyle.push(GitHubForkRibbonWrapper.leftStyle);
+        position = 'left';
+        break;
+
+      case 'right':
+        ribbonStyle.push(GitHubForkRibbon.rightStyle);
+        wrapperStyle.push(GitHubForkRibbonWrapper.rightStyle);
+        position = 'right';
+        break;
+
+      case 'left-bottom':
+        ribbonStyle.push(GitHubForkRibbon.leftBottomStyle);
+        wrapperStyle.push(GitHubForkRibbonWrapper.leftBottomStyle);
+        position = 'left-bottom';
+        break;
+
+      case 'right-bottom':
+        ribbonStyle.push(GitHubForkRibbon.rightBottomStyle);
+        wrapperStyle.push(GitHubForkRibbonWrapper.rightBottomStyle);
+        position = 'right-bottom';
+        break;
+
+      default:
+        ribbonStyle.push(GitHubForkRibbon.rightStyle);
+        wrapperStyle.push(GitHubForkRibbonWrapper.rightStyle);
+        position = 'right'
+        break;
+    }
+
+    return (
+      React.createElement("div", React.__spread({},  other, 
+           {className: "github-fork-ribbon-wrapper " + position, 
+           styles: wrapperStyle}), 
+        React.createElement("div", {className: "github-fork-ribbon", 
+             styles: ribbonStyle}, 
+          React.createElement("a", {href: this.props.href, 
+             target: this.props.target, 
+             styles: GitHubForkRibbon.urlStyle}, 
+            this.props.children
+          )
+        )
+      )
+    )
+  }
+})
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"./ribbonStyle.js":133,"react/addons":190}],133:[function(require,module,exports){
+/*
+ * "Fork me on GitHub" CSS ribbon v0.1.1 | MIT License
+ * https://github.com/simonwhitaker/github-fork-ribbon-css
+ *
+ * 20150116 Lee: use css source for inline style react component.
+*/
+
+"use strict";
+
+var ReactStyle = require('react-style');
+
+module.exports = {
+
+  GitHubForkRibbon: {
+
+    baseStyle: ReactStyle({
+      /* The right and left classes determine the side we attach our banner to */
+      position: 'absolute',
+
+      /* Add a bit of padding to give some substance outside the "stitching" */
+      padding: '2px 0',
+
+      /* Set the base colour */
+      backgroundColor: '#a00',
+
+      /* Set a gradient: transparent black at the top to almost-transparent black at the bottom */
+      // backgroundImage: '-webkit-gradient(linear, left top, left bottom, from(rgba(0, 0, 0, 0)), to(rgba(0, 0, 0, 0.15)))',
+      // backgroundImage: '-webkit-linear-gradient(top, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.15))',
+      // backgroundImage: '-moz-linear-gradient(top, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.15))',
+      // backgroundImage: '-ms-linear-gradient(top, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.15))',
+      // backgroundImage: '-o-linear-gradient(top, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.15))',
+      backgroundImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.15))',
+
+      /* Add a drop shadow */
+      // -webkit-box-shadow: '0 2px 3px 0 rgba(0, 0, 0, 0.5)',
+      // -moz-box-shadow: '0 2px 3px 0 rgba(0, 0, 0, 0.5)',
+      boxShadow: '0 2px 3px 0 rgba(0, 0, 0, 0.5)',
+
+      /* Set the font */
+      font: '700 13px "Helvetica Neue", Helvetica, Arial, sans-serif',
+
+      zIndex: '9999',
+      pointerEvents: 'auto'
+    }),
+
+    urlStyle: ReactStyle({
+      /* Set the text properties */
+      color: '#fff',
+      textDecoration: 'none',
+      textShadow: '0 -1px rgba(0, 0, 0, 0.5)',
+      textAlign: 'center',
+
+      /* Set the geometry. If you fiddle with these you'll also need
+         to tweak the top and right values in .github-fork-ribbon. */
+      width: '200px',
+      lineHeight: '20px',
+
+      /* Set the layout properties */
+      display: 'inline-block',
+      padding: '2px 0',
+
+      /* Add "stitching" effect */
+      borderWidth: '1px 0',
+      borderStyle: 'dotted',
+      // borderColor: '#fff',
+      borderColor: 'rgba(255, 255, 255, 0.7)'
+    }),
+
+    leftStyle: ReactStyle({
+      top: '42px',
+      left: '-43px',
+
+      // -webkit-transform: 'rotate(-45deg)',
+      // -moz-transform: 'rotate(-45deg)',
+      // -ms-transform: 'rotate(-45deg)',
+      // -o-transform: 'rotate(-45deg)',
+      transform: 'rotate(-45deg)'
+    }),
+
+    rightStyle: ReactStyle({
+      top: '42px',
+      right: '-43px',
+
+      // -webkit-transform: 'rotate(45deg)',
+      // -moz-transform: 'rotate(45deg)',
+      // -ms-transform: 'rotate(45deg)',
+      // -o-transform: 'rotate(45deg)',
+      transform: 'rotate(45deg)'
+    }),
+
+    leftBottomStyle: ReactStyle({
+      top: '80px',
+      left: '-43px',
+
+      // -webkit-transform: 'rotate(45deg)',
+      // -moz-transform: 'rotate(45deg)',
+      // -ms-transform: 'rotate(45deg)',
+      // -o-transform: 'rotate(45deg)',
+      transform: 'rotate(45deg)'
+    }),
+
+    rightBottomStyle: ReactStyle({
+      top: '80px',
+      right: '-43px',
+
+      // -webkit-transform: 'rotate(-45deg)',
+      // -moz-transform: 'rotate(-45deg)',
+      // -ms-transform: 'rotate(-45deg)',
+      // -o-transform: 'rotate(-45deg)',
+      transform: 'rotate(-45deg)'
+    })
+  },
+
+  GitHubForkRibbonWrapper: {
+
+    baseStyle: ReactStyle({
+      width: '150px',
+      height: '150px',
+      position: 'absolute',
+      overflow: 'hidden',
+      top: '0',
+      zIndex: '9999',
+      pointerEvents: 'none'
+    }),
+
+    fixedStyle: ReactStyle({
+      position: 'fixed'
+    }),
+
+    leftStyle: ReactStyle({
+      left: '0'
+    }),
+
+    rightStyle: ReactStyle({
+      right: '0'
+    }),
+
+    leftBottomStyle: ReactStyle({
+      position: 'fixed',
+      top: 'inherit',
+      bottom: '0',
+      left: '0'
+    }),
+
+    rightBottomStyle: ReactStyle({
+      position: 'fixed',
+      top: 'inherit',
+      bottom: '0',
+      right: '0'
+    })
+  }
+};
+
+},{"react-style":128}],134:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20409,7 +21030,7 @@ module.exports = function (React) {
   return Breadcrumb;
 }
 
-},{"../mixins/classGenerator.js":156}],126:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],135:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20436,7 +21057,7 @@ module.exports = function (React) {
   return Form;
 }
 
-},{"../mixins/classGenerator.js":156}],127:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],136:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20463,7 +21084,7 @@ module.exports = function (React) {
   return Grid;
 }
 
-},{"../mixins/classGenerator.js":156}],128:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],137:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20490,7 +21111,7 @@ module.exports = function (React) {
   return Menu;
 }
 
-},{"../mixins/classGenerator.js":156}],129:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],138:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20517,7 +21138,7 @@ module.exports = function (React) {
   return Message;
 }
 
-},{"../mixins/classGenerator.js":156}],130:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],139:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20544,7 +21165,7 @@ module.exports = function (React) {
   return Table;
 }
 
-},{"../mixins/classGenerator.js":156}],131:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],140:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20571,7 +21192,7 @@ module.exports = function (React) {
   return Column;
 }
 
-},{"../mixins/classGenerator.js":156}],132:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],141:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20604,7 +21225,7 @@ module.exports = function (React) {
   return Content;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/stateSelector.js":158}],133:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/stateSelector.js":167}],142:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20631,7 +21252,7 @@ module.exports = function (React) {
   return Field;
 }
 
-},{"../mixins/classGenerator.js":156}],134:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],143:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20658,7 +21279,7 @@ module.exports = function (React) {
   return Fields;
 }
 
-},{"../mixins/classGenerator.js":156}],135:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],144:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20685,7 +21306,7 @@ module.exports = function (React) {
   return Row;
 }
 
-},{"../mixins/classGenerator.js":156}],136:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],145:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20718,7 +21339,7 @@ module.exports = function (React) {
   return Section;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/colorSelector.js":157,"../mixins/typeSelector.js":159}],137:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/colorSelector.js":166,"../mixins/typeSelector.js":168}],146:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20745,7 +21366,7 @@ module.exports = function (React) {
   return Text;
 }
 
-},{"../mixins/classGenerator.js":156}],138:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],147:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20778,7 +21399,7 @@ module.exports = function (React) {
   return Title;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/stateSelector.js":158}],139:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/stateSelector.js":167}],148:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20875,7 +21496,7 @@ module.exports = function (React) {
   return Unit;
 }
 
-},{}],140:[function(require,module,exports){
+},{}],149:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20912,7 +21533,7 @@ module.exports = function (React) {
 }
 
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/colorSelector.js":157,"../mixins/stateSelector.js":158}],141:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/colorSelector.js":166,"../mixins/stateSelector.js":167}],150:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20936,7 +21557,7 @@ module.exports = function (React) {
   return Divider;
 }
 
-},{"../mixins/classGenerator.js":156}],142:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],151:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -20966,7 +21587,7 @@ module.exports = function (React) {
   return Flag;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156}],143:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165}],152:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21001,7 +21622,7 @@ module.exports = function (React) {
   return Header;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/colorSelector.js":157,"../mixins/stateSelector.js":158,"../mixins/typeSelector.js":159}],144:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/colorSelector.js":166,"../mixins/stateSelector.js":167,"../mixins/typeSelector.js":168}],153:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21036,7 +21657,7 @@ module.exports = function (React) {
 }
 
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/colorSelector.js":157,"../mixins/stateSelector.js":158}],145:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/colorSelector.js":166,"../mixins/stateSelector.js":167}],154:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21069,7 +21690,7 @@ module.exports = function (React) {
   return Image;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/stateSelector.js":158}],146:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/stateSelector.js":167}],155:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21121,7 +21742,7 @@ module.exports = function (React) {
   return Input;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/stateSelector.js":158}],147:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/stateSelector.js":167}],156:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21154,7 +21775,7 @@ module.exports = function (React) {
   return Label;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/colorSelector.js":157,"../mixins/typeSelector.js":159}],148:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/colorSelector.js":166,"../mixins/typeSelector.js":168}],157:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21181,7 +21802,7 @@ module.exports = function (React) {
   return List;
 }
 
-},{"../mixins/classGenerator.js":156}],149:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],158:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21215,7 +21836,7 @@ module.exports = function (React) {
   return Loader;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/stateSelector.js":158}],150:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/stateSelector.js":167}],159:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21242,7 +21863,7 @@ module.exports = function (React) {
   return Rail;
 }
 
-},{"../mixins/classGenerator.js":156}],151:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],160:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21275,7 +21896,7 @@ module.exports = function (React) {
   return Reveal;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/stateSelector.js":158}],152:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/stateSelector.js":167}],161:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21309,7 +21930,7 @@ module.exports = function (React) {
   return Segment;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/colorSelector.js":157,"../mixins/stateSelector.js":158}],153:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/colorSelector.js":166,"../mixins/stateSelector.js":167}],162:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21344,7 +21965,7 @@ module.exports = function (React) {
   return Step;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/stateSelector.js":158}],154:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/stateSelector.js":167}],163:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21371,7 +21992,7 @@ module.exports = function (React) {
   return Steps;
 }
 
-},{"../mixins/classGenerator.js":156}],155:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],164:[function(require,module,exports){
 "use strict";
 var React = require('react/addons');
 
@@ -21437,7 +22058,7 @@ module.exports = {
   Statistic: require('./views/statistic.jsx')(React)
 };
 
-},{"./collections/breadcrumb.jsx":125,"./collections/form.jsx":126,"./collections/grid.jsx":127,"./collections/menu.jsx":128,"./collections/message.jsx":129,"./collections/table.jsx":130,"./commons/column.jsx":131,"./commons/content.jsx":132,"./commons/field.jsx":133,"./commons/fields.jsx":134,"./commons/row.jsx":135,"./commons/section.jsx":136,"./commons/text.jsx":137,"./commons/title.jsx":138,"./elements/button.jsx":140,"./elements/divider.jsx":141,"./elements/flag.jsx":142,"./elements/header.jsx":143,"./elements/icon.jsx":144,"./elements/image.jsx":145,"./elements/input.jsx":146,"./elements/label.jsx":147,"./elements/list.jsx":148,"./elements/loader.jsx":149,"./elements/rail.jsx":150,"./elements/reveal.jsx":151,"./elements/segment.jsx":152,"./elements/step.jsx":153,"./elements/steps.jsx":154,"./modules/accordion.jsx":160,"./modules/checkbox.jsx":161,"./modules/dimmer.jsx":162,"./modules/dropdown.jsx":163,"./modules/modal.jsx":164,"./modules/popup.jsx":165,"./modules/progress.jsx":166,"./modules/rating.jsx":167,"./modules/search.jsx":168,"./modules/shape.jsx":169,"./modules/sidebar.jsx":170,"./modules/sticky.jsx":171,"./modules/tab.jsx":172,"./views/advertisement.jsx":173,"./views/card.jsx":174,"./views/comment.jsx":175,"./views/comments.jsx":176,"./views/feed.jsx":177,"./views/item.jsx":178,"./views/items.jsx":179,"./views/statistic.jsx":180,"react/addons":181}],156:[function(require,module,exports){
+},{"./collections/breadcrumb.jsx":134,"./collections/form.jsx":135,"./collections/grid.jsx":136,"./collections/menu.jsx":137,"./collections/message.jsx":138,"./collections/table.jsx":139,"./commons/column.jsx":140,"./commons/content.jsx":141,"./commons/field.jsx":142,"./commons/fields.jsx":143,"./commons/row.jsx":144,"./commons/section.jsx":145,"./commons/text.jsx":146,"./commons/title.jsx":147,"./elements/button.jsx":149,"./elements/divider.jsx":150,"./elements/flag.jsx":151,"./elements/header.jsx":152,"./elements/icon.jsx":153,"./elements/image.jsx":154,"./elements/input.jsx":155,"./elements/label.jsx":156,"./elements/list.jsx":157,"./elements/loader.jsx":158,"./elements/rail.jsx":159,"./elements/reveal.jsx":160,"./elements/segment.jsx":161,"./elements/step.jsx":162,"./elements/steps.jsx":163,"./modules/accordion.jsx":169,"./modules/checkbox.jsx":170,"./modules/dimmer.jsx":171,"./modules/dropdown.jsx":172,"./modules/modal.jsx":173,"./modules/popup.jsx":174,"./modules/progress.jsx":175,"./modules/rating.jsx":176,"./modules/search.jsx":177,"./modules/shape.jsx":178,"./modules/sidebar.jsx":179,"./modules/sticky.jsx":180,"./modules/tab.jsx":181,"./views/advertisement.jsx":182,"./views/card.jsx":183,"./views/comment.jsx":184,"./views/comments.jsx":185,"./views/feed.jsx":186,"./views/item.jsx":187,"./views/items.jsx":188,"./views/statistic.jsx":189,"react/addons":190}],165:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21471,7 +22092,7 @@ module.exports = function (React) {
   return ClassGenerator;
 };
 
-},{}],157:[function(require,module,exports){
+},{}],166:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21502,7 +22123,7 @@ module.exports = function (React) {
   return ColorSelector;
 };
 
-},{}],158:[function(require,module,exports){
+},{}],167:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21616,7 +22237,7 @@ module.exports = function (React) {
   return StateSelector;
 };
 
-},{}],159:[function(require,module,exports){
+},{}],168:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21645,7 +22266,7 @@ module.exports = function (React) {
   return TypeSelector;
 };
 
-},{}],160:[function(require,module,exports){
+},{}],169:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21683,7 +22304,7 @@ module.exports = function (React) {
   return Accordion;
 }
 
-},{"../mixins/classGenerator.js":156}],161:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],170:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21731,7 +22352,7 @@ module.exports = function (React) {
   return Checkbox;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/stateSelector.js":158}],162:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/stateSelector.js":167}],171:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21779,7 +22400,7 @@ module.exports = function (React) {
   return Dimmer;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/stateSelector.js":158}],163:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/stateSelector.js":167}],172:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21832,7 +22453,7 @@ module.exports = function (React) {
   return Dropdown;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/stateSelector.js":158}],164:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/stateSelector.js":167}],173:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21879,7 +22500,7 @@ module.exports = function (React) {
   return Modal;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/stateSelector.js":158}],165:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/stateSelector.js":167}],174:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21903,7 +22524,7 @@ module.exports = function (React) {
   return Popup;
 }
 
-},{"../mixins/classGenerator.js":156}],166:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],175:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -21962,7 +22583,7 @@ module.exports = function (React) {
   return Progress;
 }
 
-},{"../mixins/classGenerator.js":156,"../mixins/stateSelector.js":158}],167:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165,"../mixins/stateSelector.js":167}],176:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -22006,7 +22627,7 @@ module.exports = function (React) {
   return Rating;
 }
 
-},{"../mixins/classGenerator.js":156}],168:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],177:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -22053,7 +22674,7 @@ module.exports = function (React) {
   return Search;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/stateSelector.js":158}],169:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/stateSelector.js":167}],178:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -22094,7 +22715,7 @@ module.exports = function (React) {
   return Shape;
 }
 
-},{"../mixins/classGenerator.js":156}],170:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],179:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -22135,7 +22756,7 @@ module.exports = function (React) {
   return Sidebar;
 }
 
-},{"../mixins/classGenerator.js":156}],171:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],180:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -22176,7 +22797,7 @@ module.exports = function (React) {
   return Sticky;
 }
 
-},{"../mixins/classGenerator.js":156}],172:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],181:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -22225,7 +22846,7 @@ module.exports = function (React) {
   return Tab;
 }
 
-},{"../mixins/classGenerator.js":156,"../mixins/stateSelector.js":158}],173:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165,"../mixins/stateSelector.js":167}],182:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -22252,7 +22873,7 @@ module.exports = function (React) {
   return Ad;
 }
 
-},{"../mixins/classGenerator.js":156}],174:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],183:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -22279,7 +22900,7 @@ module.exports = function (React) {
   return Card;
 }
 
-},{"../mixins/classGenerator.js":156}],175:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],184:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -22306,7 +22927,7 @@ module.exports = function (React) {
   return Comment;
 }
 
-},{"../mixins/classGenerator.js":156}],176:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],185:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -22333,7 +22954,7 @@ module.exports = function (React) {
   return Comments;
 }
 
-},{"../mixins/classGenerator.js":156}],177:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],186:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -22360,7 +22981,7 @@ module.exports = function (React) {
   return Feed;
 }
 
-},{"../mixins/classGenerator.js":156}],178:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],187:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -22393,7 +23014,7 @@ module.exports = function (React) {
   return Item;
 }
 
-},{"../commons/unit.jsx":139,"../mixins/classGenerator.js":156,"../mixins/typeSelector.js":159}],179:[function(require,module,exports){
+},{"../commons/unit.jsx":148,"../mixins/classGenerator.js":165,"../mixins/typeSelector.js":168}],188:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -22430,7 +23051,7 @@ module.exports = function (React) {
   return Items;
 }
 
-},{"../mixins/classGenerator.js":156}],180:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],189:[function(require,module,exports){
 "use strict";
 module.exports = function (React) {
 
@@ -22457,10 +23078,10 @@ module.exports = function (React) {
   return Statistic;
 }
 
-},{"../mixins/classGenerator.js":156}],181:[function(require,module,exports){
+},{"../mixins/classGenerator.js":165}],190:[function(require,module,exports){
 module.exports = require('./lib/ReactWithAddons');
 
-},{"./lib/ReactWithAddons":272}],182:[function(require,module,exports){
+},{"./lib/ReactWithAddons":281}],191:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -22487,7 +23108,7 @@ var AutoFocusMixin = {
 
 module.exports = AutoFocusMixin;
 
-},{"./focusNode":306}],183:[function(require,module,exports){
+},{"./focusNode":315}],192:[function(require,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  * All rights reserved.
@@ -22709,7 +23330,7 @@ var BeforeInputEventPlugin = {
 
 module.exports = BeforeInputEventPlugin;
 
-},{"./EventConstants":197,"./EventPropagators":202,"./ExecutionEnvironment":203,"./SyntheticInputEvent":282,"./keyOf":328}],184:[function(require,module,exports){
+},{"./EventConstants":206,"./EventPropagators":211,"./ExecutionEnvironment":212,"./SyntheticInputEvent":291,"./keyOf":337}],193:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -22821,7 +23442,7 @@ var CSSCore = {
 module.exports = CSSCore;
 
 }).call(this,require('_process'))
-},{"./invariant":321,"_process":4}],185:[function(require,module,exports){
+},{"./invariant":330,"_process":4}],194:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -22940,7 +23561,7 @@ var CSSProperty = {
 
 module.exports = CSSProperty;
 
-},{}],186:[function(require,module,exports){
+},{}],195:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -23075,7 +23696,7 @@ var CSSPropertyOperations = {
 module.exports = CSSPropertyOperations;
 
 }).call(this,require('_process'))
-},{"./CSSProperty":185,"./ExecutionEnvironment":203,"./camelizeStyleName":293,"./dangerousStyleValue":300,"./hyphenateStyleName":319,"./memoizeStringOnly":330,"./warning":341,"_process":4}],187:[function(require,module,exports){
+},{"./CSSProperty":194,"./ExecutionEnvironment":212,"./camelizeStyleName":302,"./dangerousStyleValue":309,"./hyphenateStyleName":328,"./memoizeStringOnly":339,"./warning":350,"_process":4}],196:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -23175,7 +23796,7 @@ PooledClass.addPoolingTo(CallbackQueue);
 module.exports = CallbackQueue;
 
 }).call(this,require('_process'))
-},{"./Object.assign":209,"./PooledClass":210,"./invariant":321,"_process":4}],188:[function(require,module,exports){
+},{"./Object.assign":218,"./PooledClass":219,"./invariant":330,"_process":4}],197:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -23557,7 +24178,7 @@ var ChangeEventPlugin = {
 
 module.exports = ChangeEventPlugin;
 
-},{"./EventConstants":197,"./EventPluginHub":199,"./EventPropagators":202,"./ExecutionEnvironment":203,"./ReactUpdates":271,"./SyntheticEvent":280,"./isEventSupported":322,"./isTextInputElement":324,"./keyOf":328}],189:[function(require,module,exports){
+},{"./EventConstants":206,"./EventPluginHub":208,"./EventPropagators":211,"./ExecutionEnvironment":212,"./ReactUpdates":280,"./SyntheticEvent":289,"./isEventSupported":331,"./isTextInputElement":333,"./keyOf":337}],198:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -23582,7 +24203,7 @@ var ClientReactRootIndex = {
 
 module.exports = ClientReactRootIndex;
 
-},{}],190:[function(require,module,exports){
+},{}],199:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -23841,7 +24462,7 @@ var CompositionEventPlugin = {
 
 module.exports = CompositionEventPlugin;
 
-},{"./EventConstants":197,"./EventPropagators":202,"./ExecutionEnvironment":203,"./ReactInputSelection":245,"./SyntheticCompositionEvent":278,"./getTextContentAccessor":316,"./keyOf":328}],191:[function(require,module,exports){
+},{"./EventConstants":206,"./EventPropagators":211,"./ExecutionEnvironment":212,"./ReactInputSelection":254,"./SyntheticCompositionEvent":287,"./getTextContentAccessor":325,"./keyOf":337}],200:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -24016,7 +24637,7 @@ var DOMChildrenOperations = {
 module.exports = DOMChildrenOperations;
 
 }).call(this,require('_process'))
-},{"./Danger":194,"./ReactMultiChildUpdateTypes":252,"./getTextContentAccessor":316,"./invariant":321,"_process":4}],192:[function(require,module,exports){
+},{"./Danger":203,"./ReactMultiChildUpdateTypes":261,"./getTextContentAccessor":325,"./invariant":330,"_process":4}],201:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -24315,7 +24936,7 @@ var DOMProperty = {
 module.exports = DOMProperty;
 
 }).call(this,require('_process'))
-},{"./invariant":321,"_process":4}],193:[function(require,module,exports){
+},{"./invariant":330,"_process":4}],202:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -24512,7 +25133,7 @@ var DOMPropertyOperations = {
 module.exports = DOMPropertyOperations;
 
 }).call(this,require('_process'))
-},{"./DOMProperty":192,"./escapeTextForBrowser":304,"./memoizeStringOnly":330,"./warning":341,"_process":4}],194:[function(require,module,exports){
+},{"./DOMProperty":201,"./escapeTextForBrowser":313,"./memoizeStringOnly":339,"./warning":350,"_process":4}],203:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -24698,7 +25319,7 @@ var Danger = {
 module.exports = Danger;
 
 }).call(this,require('_process'))
-},{"./ExecutionEnvironment":203,"./createNodesFromMarkup":298,"./emptyFunction":302,"./getMarkupWrap":313,"./invariant":321,"_process":4}],195:[function(require,module,exports){
+},{"./ExecutionEnvironment":212,"./createNodesFromMarkup":307,"./emptyFunction":311,"./getMarkupWrap":322,"./invariant":330,"_process":4}],204:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -24738,7 +25359,7 @@ var DefaultEventPluginOrder = [
 
 module.exports = DefaultEventPluginOrder;
 
-},{"./keyOf":328}],196:[function(require,module,exports){
+},{"./keyOf":337}],205:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -24878,7 +25499,7 @@ var EnterLeaveEventPlugin = {
 
 module.exports = EnterLeaveEventPlugin;
 
-},{"./EventConstants":197,"./EventPropagators":202,"./ReactMount":250,"./SyntheticMouseEvent":284,"./keyOf":328}],197:[function(require,module,exports){
+},{"./EventConstants":206,"./EventPropagators":211,"./ReactMount":259,"./SyntheticMouseEvent":293,"./keyOf":337}],206:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -24950,7 +25571,7 @@ var EventConstants = {
 
 module.exports = EventConstants;
 
-},{"./keyMirror":327}],198:[function(require,module,exports){
+},{"./keyMirror":336}],207:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014 Facebook, Inc.
@@ -25040,7 +25661,7 @@ var EventListener = {
 module.exports = EventListener;
 
 }).call(this,require('_process'))
-},{"./emptyFunction":302,"_process":4}],199:[function(require,module,exports){
+},{"./emptyFunction":311,"_process":4}],208:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -25316,7 +25937,7 @@ var EventPluginHub = {
 module.exports = EventPluginHub;
 
 }).call(this,require('_process'))
-},{"./EventPluginRegistry":200,"./EventPluginUtils":201,"./accumulateInto":290,"./forEachAccumulated":307,"./invariant":321,"_process":4}],200:[function(require,module,exports){
+},{"./EventPluginRegistry":209,"./EventPluginUtils":210,"./accumulateInto":299,"./forEachAccumulated":316,"./invariant":330,"_process":4}],209:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -25596,7 +26217,7 @@ var EventPluginRegistry = {
 module.exports = EventPluginRegistry;
 
 }).call(this,require('_process'))
-},{"./invariant":321,"_process":4}],201:[function(require,module,exports){
+},{"./invariant":330,"_process":4}],210:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -25817,7 +26438,7 @@ var EventPluginUtils = {
 module.exports = EventPluginUtils;
 
 }).call(this,require('_process'))
-},{"./EventConstants":197,"./invariant":321,"_process":4}],202:[function(require,module,exports){
+},{"./EventConstants":206,"./invariant":330,"_process":4}],211:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -25959,7 +26580,7 @@ var EventPropagators = {
 module.exports = EventPropagators;
 
 }).call(this,require('_process'))
-},{"./EventConstants":197,"./EventPluginHub":199,"./accumulateInto":290,"./forEachAccumulated":307,"_process":4}],203:[function(require,module,exports){
+},{"./EventConstants":206,"./EventPluginHub":208,"./accumulateInto":299,"./forEachAccumulated":316,"_process":4}],212:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -26004,7 +26625,7 @@ var ExecutionEnvironment = {
 
 module.exports = ExecutionEnvironment;
 
-},{}],204:[function(require,module,exports){
+},{}],213:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -26196,7 +26817,7 @@ var HTMLDOMPropertyConfig = {
 
 module.exports = HTMLDOMPropertyConfig;
 
-},{"./DOMProperty":192,"./ExecutionEnvironment":203}],205:[function(require,module,exports){
+},{"./DOMProperty":201,"./ExecutionEnvironment":212}],214:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -26237,7 +26858,7 @@ var LinkedStateMixin = {
 
 module.exports = LinkedStateMixin;
 
-},{"./ReactLink":248,"./ReactStateSetters":265}],206:[function(require,module,exports){
+},{"./ReactLink":257,"./ReactStateSetters":274}],215:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -26393,7 +27014,7 @@ var LinkedValueUtils = {
 module.exports = LinkedValueUtils;
 
 }).call(this,require('_process'))
-},{"./ReactPropTypes":259,"./invariant":321,"_process":4}],207:[function(require,module,exports){
+},{"./ReactPropTypes":268,"./invariant":330,"_process":4}],216:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014, Facebook, Inc.
@@ -26443,7 +27064,7 @@ var LocalEventTrapMixin = {
 module.exports = LocalEventTrapMixin;
 
 }).call(this,require('_process'))
-},{"./ReactBrowserEventEmitter":213,"./accumulateInto":290,"./forEachAccumulated":307,"./invariant":321,"_process":4}],208:[function(require,module,exports){
+},{"./ReactBrowserEventEmitter":222,"./accumulateInto":299,"./forEachAccumulated":316,"./invariant":330,"_process":4}],217:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -26501,7 +27122,7 @@ var MobileSafariClickEventPlugin = {
 
 module.exports = MobileSafariClickEventPlugin;
 
-},{"./EventConstants":197,"./emptyFunction":302}],209:[function(require,module,exports){
+},{"./EventConstants":206,"./emptyFunction":311}],218:[function(require,module,exports){
 /**
  * Copyright 2014, Facebook, Inc.
  * All rights reserved.
@@ -26548,7 +27169,7 @@ function assign(target, sources) {
 
 module.exports = assign;
 
-},{}],210:[function(require,module,exports){
+},{}],219:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -26664,7 +27285,7 @@ var PooledClass = {
 module.exports = PooledClass;
 
 }).call(this,require('_process'))
-},{"./invariant":321,"_process":4}],211:[function(require,module,exports){
+},{"./invariant":330,"_process":4}],220:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -26852,7 +27473,7 @@ React.version = '0.12.2';
 module.exports = React;
 
 }).call(this,require('_process'))
-},{"./DOMPropertyOperations":193,"./EventPluginUtils":201,"./ExecutionEnvironment":203,"./Object.assign":209,"./ReactChildren":216,"./ReactComponent":217,"./ReactCompositeComponent":220,"./ReactContext":221,"./ReactCurrentOwner":222,"./ReactDOM":223,"./ReactDOMComponent":225,"./ReactDefaultInjection":235,"./ReactElement":238,"./ReactElementValidator":239,"./ReactInstanceHandles":246,"./ReactLegacyElement":247,"./ReactMount":250,"./ReactMultiChild":251,"./ReactPerf":255,"./ReactPropTypes":259,"./ReactServerRendering":263,"./ReactTextComponent":267,"./deprecated":301,"./onlyChild":332,"_process":4}],212:[function(require,module,exports){
+},{"./DOMPropertyOperations":202,"./EventPluginUtils":210,"./ExecutionEnvironment":212,"./Object.assign":218,"./ReactChildren":225,"./ReactComponent":226,"./ReactCompositeComponent":229,"./ReactContext":230,"./ReactCurrentOwner":231,"./ReactDOM":232,"./ReactDOMComponent":234,"./ReactDefaultInjection":244,"./ReactElement":247,"./ReactElementValidator":248,"./ReactInstanceHandles":255,"./ReactLegacyElement":256,"./ReactMount":259,"./ReactMultiChild":260,"./ReactPerf":264,"./ReactPropTypes":268,"./ReactServerRendering":272,"./ReactTextComponent":276,"./deprecated":310,"./onlyChild":341,"_process":4}],221:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -26895,7 +27516,7 @@ var ReactBrowserComponentMixin = {
 module.exports = ReactBrowserComponentMixin;
 
 }).call(this,require('_process'))
-},{"./ReactEmptyComponent":240,"./ReactMount":250,"./invariant":321,"_process":4}],213:[function(require,module,exports){
+},{"./ReactEmptyComponent":249,"./ReactMount":259,"./invariant":330,"_process":4}],222:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -27250,7 +27871,7 @@ var ReactBrowserEventEmitter = assign({}, ReactEventEmitterMixin, {
 
 module.exports = ReactBrowserEventEmitter;
 
-},{"./EventConstants":197,"./EventPluginHub":199,"./EventPluginRegistry":200,"./Object.assign":209,"./ReactEventEmitterMixin":242,"./ViewportMetrics":289,"./isEventSupported":322}],214:[function(require,module,exports){
+},{"./EventConstants":206,"./EventPluginHub":208,"./EventPluginRegistry":209,"./Object.assign":218,"./ReactEventEmitterMixin":251,"./ViewportMetrics":298,"./isEventSupported":331}],223:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -27317,7 +27938,7 @@ var ReactCSSTransitionGroup = React.createClass({
 
 module.exports = ReactCSSTransitionGroup;
 
-},{"./Object.assign":209,"./React":211,"./ReactCSSTransitionGroupChild":215,"./ReactTransitionGroup":270}],215:[function(require,module,exports){
+},{"./Object.assign":218,"./React":220,"./ReactCSSTransitionGroupChild":224,"./ReactTransitionGroup":279}],224:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -27452,7 +28073,7 @@ var ReactCSSTransitionGroupChild = React.createClass({
 module.exports = ReactCSSTransitionGroupChild;
 
 }).call(this,require('_process'))
-},{"./CSSCore":184,"./React":211,"./ReactTransitionEvents":269,"./onlyChild":332,"_process":4}],216:[function(require,module,exports){
+},{"./CSSCore":193,"./React":220,"./ReactTransitionEvents":278,"./onlyChild":341,"_process":4}],225:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -27602,7 +28223,7 @@ var ReactChildren = {
 module.exports = ReactChildren;
 
 }).call(this,require('_process'))
-},{"./PooledClass":210,"./traverseAllChildren":339,"./warning":341,"_process":4}],217:[function(require,module,exports){
+},{"./PooledClass":219,"./traverseAllChildren":348,"./warning":350,"_process":4}],226:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -28045,7 +28666,7 @@ var ReactComponent = {
 module.exports = ReactComponent;
 
 }).call(this,require('_process'))
-},{"./Object.assign":209,"./ReactElement":238,"./ReactOwner":254,"./ReactUpdates":271,"./invariant":321,"./keyMirror":327,"_process":4}],218:[function(require,module,exports){
+},{"./Object.assign":218,"./ReactElement":247,"./ReactOwner":263,"./ReactUpdates":280,"./invariant":330,"./keyMirror":336,"_process":4}],227:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -28167,7 +28788,7 @@ var ReactComponentBrowserEnvironment = {
 module.exports = ReactComponentBrowserEnvironment;
 
 }).call(this,require('_process'))
-},{"./ReactDOMIDOperations":227,"./ReactMarkupChecksum":249,"./ReactMount":250,"./ReactPerf":255,"./ReactReconcileTransaction":261,"./getReactRootElementInContainer":315,"./invariant":321,"./setInnerHTML":335,"_process":4}],219:[function(require,module,exports){
+},{"./ReactDOMIDOperations":236,"./ReactMarkupChecksum":258,"./ReactMount":259,"./ReactPerf":264,"./ReactReconcileTransaction":270,"./getReactRootElementInContainer":324,"./invariant":330,"./setInnerHTML":344,"_process":4}],228:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -28216,7 +28837,7 @@ var ReactComponentWithPureRenderMixin = {
 
 module.exports = ReactComponentWithPureRenderMixin;
 
-},{"./shallowEqual":336}],220:[function(require,module,exports){
+},{"./shallowEqual":345}],229:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -29656,7 +30277,7 @@ var ReactCompositeComponent = {
 module.exports = ReactCompositeComponent;
 
 }).call(this,require('_process'))
-},{"./Object.assign":209,"./ReactComponent":217,"./ReactContext":221,"./ReactCurrentOwner":222,"./ReactElement":238,"./ReactElementValidator":239,"./ReactEmptyComponent":240,"./ReactErrorUtils":241,"./ReactLegacyElement":247,"./ReactOwner":254,"./ReactPerf":255,"./ReactPropTransferer":256,"./ReactPropTypeLocationNames":257,"./ReactPropTypeLocations":258,"./ReactUpdates":271,"./instantiateReactComponent":320,"./invariant":321,"./keyMirror":327,"./keyOf":328,"./mapObject":329,"./monitorCodeUse":331,"./shouldUpdateReactComponent":337,"./warning":341,"_process":4}],221:[function(require,module,exports){
+},{"./Object.assign":218,"./ReactComponent":226,"./ReactContext":230,"./ReactCurrentOwner":231,"./ReactElement":247,"./ReactElementValidator":248,"./ReactEmptyComponent":249,"./ReactErrorUtils":250,"./ReactLegacyElement":256,"./ReactOwner":263,"./ReactPerf":264,"./ReactPropTransferer":265,"./ReactPropTypeLocationNames":266,"./ReactPropTypeLocations":267,"./ReactUpdates":280,"./instantiateReactComponent":329,"./invariant":330,"./keyMirror":336,"./keyOf":337,"./mapObject":338,"./monitorCodeUse":340,"./shouldUpdateReactComponent":346,"./warning":350,"_process":4}],230:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -29718,7 +30339,7 @@ var ReactContext = {
 
 module.exports = ReactContext;
 
-},{"./Object.assign":209}],222:[function(require,module,exports){
+},{"./Object.assign":218}],231:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -29752,7 +30373,7 @@ var ReactCurrentOwner = {
 
 module.exports = ReactCurrentOwner;
 
-},{}],223:[function(require,module,exports){
+},{}],232:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -29935,7 +30556,7 @@ var ReactDOM = mapObject({
 module.exports = ReactDOM;
 
 }).call(this,require('_process'))
-},{"./ReactElement":238,"./ReactElementValidator":239,"./ReactLegacyElement":247,"./mapObject":329,"_process":4}],224:[function(require,module,exports){
+},{"./ReactElement":247,"./ReactElementValidator":248,"./ReactLegacyElement":256,"./mapObject":338,"_process":4}],233:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -30000,7 +30621,7 @@ var ReactDOMButton = ReactCompositeComponent.createClass({
 
 module.exports = ReactDOMButton;
 
-},{"./AutoFocusMixin":182,"./ReactBrowserComponentMixin":212,"./ReactCompositeComponent":220,"./ReactDOM":223,"./ReactElement":238,"./keyMirror":327}],225:[function(require,module,exports){
+},{"./AutoFocusMixin":191,"./ReactBrowserComponentMixin":221,"./ReactCompositeComponent":229,"./ReactDOM":232,"./ReactElement":247,"./keyMirror":336}],234:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -30487,7 +31108,7 @@ assign(
 module.exports = ReactDOMComponent;
 
 }).call(this,require('_process'))
-},{"./CSSPropertyOperations":186,"./DOMProperty":192,"./DOMPropertyOperations":193,"./Object.assign":209,"./ReactBrowserComponentMixin":212,"./ReactBrowserEventEmitter":213,"./ReactComponent":217,"./ReactMount":250,"./ReactMultiChild":251,"./ReactPerf":255,"./escapeTextForBrowser":304,"./invariant":321,"./isEventSupported":322,"./keyOf":328,"./monitorCodeUse":331,"_process":4}],226:[function(require,module,exports){
+},{"./CSSPropertyOperations":195,"./DOMProperty":201,"./DOMPropertyOperations":202,"./Object.assign":218,"./ReactBrowserComponentMixin":221,"./ReactBrowserEventEmitter":222,"./ReactComponent":226,"./ReactMount":259,"./ReactMultiChild":260,"./ReactPerf":264,"./escapeTextForBrowser":313,"./invariant":330,"./isEventSupported":331,"./keyOf":337,"./monitorCodeUse":340,"_process":4}],235:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -30537,7 +31158,7 @@ var ReactDOMForm = ReactCompositeComponent.createClass({
 
 module.exports = ReactDOMForm;
 
-},{"./EventConstants":197,"./LocalEventTrapMixin":207,"./ReactBrowserComponentMixin":212,"./ReactCompositeComponent":220,"./ReactDOM":223,"./ReactElement":238}],227:[function(require,module,exports){
+},{"./EventConstants":206,"./LocalEventTrapMixin":216,"./ReactBrowserComponentMixin":221,"./ReactCompositeComponent":229,"./ReactDOM":232,"./ReactElement":247}],236:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -30723,7 +31344,7 @@ var ReactDOMIDOperations = {
 module.exports = ReactDOMIDOperations;
 
 }).call(this,require('_process'))
-},{"./CSSPropertyOperations":186,"./DOMChildrenOperations":191,"./DOMPropertyOperations":193,"./ReactMount":250,"./ReactPerf":255,"./invariant":321,"./setInnerHTML":335,"_process":4}],228:[function(require,module,exports){
+},{"./CSSPropertyOperations":195,"./DOMChildrenOperations":200,"./DOMPropertyOperations":202,"./ReactMount":259,"./ReactPerf":264,"./invariant":330,"./setInnerHTML":344,"_process":4}],237:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -30771,7 +31392,7 @@ var ReactDOMImg = ReactCompositeComponent.createClass({
 
 module.exports = ReactDOMImg;
 
-},{"./EventConstants":197,"./LocalEventTrapMixin":207,"./ReactBrowserComponentMixin":212,"./ReactCompositeComponent":220,"./ReactDOM":223,"./ReactElement":238}],229:[function(require,module,exports){
+},{"./EventConstants":206,"./LocalEventTrapMixin":216,"./ReactBrowserComponentMixin":221,"./ReactCompositeComponent":229,"./ReactDOM":232,"./ReactElement":247}],238:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -30949,7 +31570,7 @@ var ReactDOMInput = ReactCompositeComponent.createClass({
 module.exports = ReactDOMInput;
 
 }).call(this,require('_process'))
-},{"./AutoFocusMixin":182,"./DOMPropertyOperations":193,"./LinkedValueUtils":206,"./Object.assign":209,"./ReactBrowserComponentMixin":212,"./ReactCompositeComponent":220,"./ReactDOM":223,"./ReactElement":238,"./ReactMount":250,"./ReactUpdates":271,"./invariant":321,"_process":4}],230:[function(require,module,exports){
+},{"./AutoFocusMixin":191,"./DOMPropertyOperations":202,"./LinkedValueUtils":215,"./Object.assign":218,"./ReactBrowserComponentMixin":221,"./ReactCompositeComponent":229,"./ReactDOM":232,"./ReactElement":247,"./ReactMount":259,"./ReactUpdates":280,"./invariant":330,"_process":4}],239:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -31002,7 +31623,7 @@ var ReactDOMOption = ReactCompositeComponent.createClass({
 module.exports = ReactDOMOption;
 
 }).call(this,require('_process'))
-},{"./ReactBrowserComponentMixin":212,"./ReactCompositeComponent":220,"./ReactDOM":223,"./ReactElement":238,"./warning":341,"_process":4}],231:[function(require,module,exports){
+},{"./ReactBrowserComponentMixin":221,"./ReactCompositeComponent":229,"./ReactDOM":232,"./ReactElement":247,"./warning":350,"_process":4}],240:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -31186,7 +31807,7 @@ var ReactDOMSelect = ReactCompositeComponent.createClass({
 
 module.exports = ReactDOMSelect;
 
-},{"./AutoFocusMixin":182,"./LinkedValueUtils":206,"./Object.assign":209,"./ReactBrowserComponentMixin":212,"./ReactCompositeComponent":220,"./ReactDOM":223,"./ReactElement":238,"./ReactUpdates":271}],232:[function(require,module,exports){
+},{"./AutoFocusMixin":191,"./LinkedValueUtils":215,"./Object.assign":218,"./ReactBrowserComponentMixin":221,"./ReactCompositeComponent":229,"./ReactDOM":232,"./ReactElement":247,"./ReactUpdates":280}],241:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -31395,7 +32016,7 @@ var ReactDOMSelection = {
 
 module.exports = ReactDOMSelection;
 
-},{"./ExecutionEnvironment":203,"./getNodeForCharacterOffset":314,"./getTextContentAccessor":316}],233:[function(require,module,exports){
+},{"./ExecutionEnvironment":212,"./getNodeForCharacterOffset":323,"./getTextContentAccessor":325}],242:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -31536,7 +32157,7 @@ var ReactDOMTextarea = ReactCompositeComponent.createClass({
 module.exports = ReactDOMTextarea;
 
 }).call(this,require('_process'))
-},{"./AutoFocusMixin":182,"./DOMPropertyOperations":193,"./LinkedValueUtils":206,"./Object.assign":209,"./ReactBrowserComponentMixin":212,"./ReactCompositeComponent":220,"./ReactDOM":223,"./ReactElement":238,"./ReactUpdates":271,"./invariant":321,"./warning":341,"_process":4}],234:[function(require,module,exports){
+},{"./AutoFocusMixin":191,"./DOMPropertyOperations":202,"./LinkedValueUtils":215,"./Object.assign":218,"./ReactBrowserComponentMixin":221,"./ReactCompositeComponent":229,"./ReactDOM":232,"./ReactElement":247,"./ReactUpdates":280,"./invariant":330,"./warning":350,"_process":4}],243:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -31609,7 +32230,7 @@ var ReactDefaultBatchingStrategy = {
 
 module.exports = ReactDefaultBatchingStrategy;
 
-},{"./Object.assign":209,"./ReactUpdates":271,"./Transaction":288,"./emptyFunction":302}],235:[function(require,module,exports){
+},{"./Object.assign":218,"./ReactUpdates":280,"./Transaction":297,"./emptyFunction":311}],244:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -31738,7 +32359,7 @@ module.exports = {
 };
 
 }).call(this,require('_process'))
-},{"./BeforeInputEventPlugin":183,"./ChangeEventPlugin":188,"./ClientReactRootIndex":189,"./CompositionEventPlugin":190,"./DefaultEventPluginOrder":195,"./EnterLeaveEventPlugin":196,"./ExecutionEnvironment":203,"./HTMLDOMPropertyConfig":204,"./MobileSafariClickEventPlugin":208,"./ReactBrowserComponentMixin":212,"./ReactComponentBrowserEnvironment":218,"./ReactDOMButton":224,"./ReactDOMComponent":225,"./ReactDOMForm":226,"./ReactDOMImg":228,"./ReactDOMInput":229,"./ReactDOMOption":230,"./ReactDOMSelect":231,"./ReactDOMTextarea":233,"./ReactDefaultBatchingStrategy":234,"./ReactDefaultPerf":236,"./ReactEventListener":243,"./ReactInjection":244,"./ReactInstanceHandles":246,"./ReactMount":250,"./SVGDOMPropertyConfig":273,"./SelectEventPlugin":274,"./ServerReactRootIndex":275,"./SimpleEventPlugin":276,"./createFullPageComponent":297,"_process":4}],236:[function(require,module,exports){
+},{"./BeforeInputEventPlugin":192,"./ChangeEventPlugin":197,"./ClientReactRootIndex":198,"./CompositionEventPlugin":199,"./DefaultEventPluginOrder":204,"./EnterLeaveEventPlugin":205,"./ExecutionEnvironment":212,"./HTMLDOMPropertyConfig":213,"./MobileSafariClickEventPlugin":217,"./ReactBrowserComponentMixin":221,"./ReactComponentBrowserEnvironment":227,"./ReactDOMButton":233,"./ReactDOMComponent":234,"./ReactDOMForm":235,"./ReactDOMImg":237,"./ReactDOMInput":238,"./ReactDOMOption":239,"./ReactDOMSelect":240,"./ReactDOMTextarea":242,"./ReactDefaultBatchingStrategy":243,"./ReactDefaultPerf":245,"./ReactEventListener":252,"./ReactInjection":253,"./ReactInstanceHandles":255,"./ReactMount":259,"./SVGDOMPropertyConfig":282,"./SelectEventPlugin":283,"./ServerReactRootIndex":284,"./SimpleEventPlugin":285,"./createFullPageComponent":306,"_process":4}],245:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -31998,7 +32619,7 @@ var ReactDefaultPerf = {
 
 module.exports = ReactDefaultPerf;
 
-},{"./DOMProperty":192,"./ReactDefaultPerfAnalysis":237,"./ReactMount":250,"./ReactPerf":255,"./performanceNow":334}],237:[function(require,module,exports){
+},{"./DOMProperty":201,"./ReactDefaultPerfAnalysis":246,"./ReactMount":259,"./ReactPerf":264,"./performanceNow":343}],246:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -32204,7 +32825,7 @@ var ReactDefaultPerfAnalysis = {
 
 module.exports = ReactDefaultPerfAnalysis;
 
-},{"./Object.assign":209}],238:[function(require,module,exports){
+},{"./Object.assign":218}],247:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014, Facebook, Inc.
@@ -32450,7 +33071,7 @@ ReactElement.isValidElement = function(object) {
 module.exports = ReactElement;
 
 }).call(this,require('_process'))
-},{"./ReactContext":221,"./ReactCurrentOwner":222,"./warning":341,"_process":4}],239:[function(require,module,exports){
+},{"./ReactContext":230,"./ReactCurrentOwner":231,"./warning":350,"_process":4}],248:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014, Facebook, Inc.
@@ -32732,7 +33353,7 @@ var ReactElementValidator = {
 module.exports = ReactElementValidator;
 
 }).call(this,require('_process'))
-},{"./ReactCurrentOwner":222,"./ReactElement":238,"./ReactPropTypeLocations":258,"./monitorCodeUse":331,"./warning":341,"_process":4}],240:[function(require,module,exports){
+},{"./ReactCurrentOwner":231,"./ReactElement":247,"./ReactPropTypeLocations":267,"./monitorCodeUse":340,"./warning":350,"_process":4}],249:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014, Facebook, Inc.
@@ -32809,7 +33430,7 @@ var ReactEmptyComponent = {
 module.exports = ReactEmptyComponent;
 
 }).call(this,require('_process'))
-},{"./ReactElement":238,"./invariant":321,"_process":4}],241:[function(require,module,exports){
+},{"./ReactElement":247,"./invariant":330,"_process":4}],250:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -32841,7 +33462,7 @@ var ReactErrorUtils = {
 
 module.exports = ReactErrorUtils;
 
-},{}],242:[function(require,module,exports){
+},{}],251:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -32891,7 +33512,7 @@ var ReactEventEmitterMixin = {
 
 module.exports = ReactEventEmitterMixin;
 
-},{"./EventPluginHub":199}],243:[function(require,module,exports){
+},{"./EventPluginHub":208}],252:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -33075,7 +33696,7 @@ var ReactEventListener = {
 
 module.exports = ReactEventListener;
 
-},{"./EventListener":198,"./ExecutionEnvironment":203,"./Object.assign":209,"./PooledClass":210,"./ReactInstanceHandles":246,"./ReactMount":250,"./ReactUpdates":271,"./getEventTarget":312,"./getUnboundedScrollPosition":317}],244:[function(require,module,exports){
+},{"./EventListener":207,"./ExecutionEnvironment":212,"./Object.assign":218,"./PooledClass":219,"./ReactInstanceHandles":255,"./ReactMount":259,"./ReactUpdates":280,"./getEventTarget":321,"./getUnboundedScrollPosition":326}],253:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -33115,7 +33736,7 @@ var ReactInjection = {
 
 module.exports = ReactInjection;
 
-},{"./DOMProperty":192,"./EventPluginHub":199,"./ReactBrowserEventEmitter":213,"./ReactComponent":217,"./ReactCompositeComponent":220,"./ReactEmptyComponent":240,"./ReactNativeComponent":253,"./ReactPerf":255,"./ReactRootIndex":262,"./ReactUpdates":271}],245:[function(require,module,exports){
+},{"./DOMProperty":201,"./EventPluginHub":208,"./ReactBrowserEventEmitter":222,"./ReactComponent":226,"./ReactCompositeComponent":229,"./ReactEmptyComponent":249,"./ReactNativeComponent":262,"./ReactPerf":264,"./ReactRootIndex":271,"./ReactUpdates":280}],254:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -33251,7 +33872,7 @@ var ReactInputSelection = {
 
 module.exports = ReactInputSelection;
 
-},{"./ReactDOMSelection":232,"./containsNode":295,"./focusNode":306,"./getActiveElement":308}],246:[function(require,module,exports){
+},{"./ReactDOMSelection":241,"./containsNode":304,"./focusNode":315,"./getActiveElement":317}],255:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -33586,7 +34207,7 @@ var ReactInstanceHandles = {
 module.exports = ReactInstanceHandles;
 
 }).call(this,require('_process'))
-},{"./ReactRootIndex":262,"./invariant":321,"_process":4}],247:[function(require,module,exports){
+},{"./ReactRootIndex":271,"./invariant":330,"_process":4}],256:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014, Facebook, Inc.
@@ -33833,7 +34454,7 @@ ReactLegacyElementFactory._isLegacyCallWarningEnabled = true;
 module.exports = ReactLegacyElementFactory;
 
 }).call(this,require('_process'))
-},{"./ReactCurrentOwner":222,"./invariant":321,"./monitorCodeUse":331,"./warning":341,"_process":4}],248:[function(require,module,exports){
+},{"./ReactCurrentOwner":231,"./invariant":330,"./monitorCodeUse":340,"./warning":350,"_process":4}],257:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -33906,7 +34527,7 @@ ReactLink.PropTypes = {
 
 module.exports = ReactLink;
 
-},{"./React":211}],249:[function(require,module,exports){
+},{"./React":220}],258:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -33954,7 +34575,7 @@ var ReactMarkupChecksum = {
 
 module.exports = ReactMarkupChecksum;
 
-},{"./adler32":291}],250:[function(require,module,exports){
+},{"./adler32":300}],259:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -34652,7 +35273,7 @@ ReactMount.renderComponent = deprecated(
 module.exports = ReactMount;
 
 }).call(this,require('_process'))
-},{"./DOMProperty":192,"./ReactBrowserEventEmitter":213,"./ReactCurrentOwner":222,"./ReactElement":238,"./ReactInstanceHandles":246,"./ReactLegacyElement":247,"./ReactPerf":255,"./containsNode":295,"./deprecated":301,"./getReactRootElementInContainer":315,"./instantiateReactComponent":320,"./invariant":321,"./shouldUpdateReactComponent":337,"./warning":341,"_process":4}],251:[function(require,module,exports){
+},{"./DOMProperty":201,"./ReactBrowserEventEmitter":222,"./ReactCurrentOwner":231,"./ReactElement":247,"./ReactInstanceHandles":255,"./ReactLegacyElement":256,"./ReactPerf":264,"./containsNode":304,"./deprecated":310,"./getReactRootElementInContainer":324,"./instantiateReactComponent":329,"./invariant":330,"./shouldUpdateReactComponent":346,"./warning":350,"_process":4}],260:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -35080,7 +35701,7 @@ var ReactMultiChild = {
 
 module.exports = ReactMultiChild;
 
-},{"./ReactComponent":217,"./ReactMultiChildUpdateTypes":252,"./flattenChildren":305,"./instantiateReactComponent":320,"./shouldUpdateReactComponent":337}],252:[function(require,module,exports){
+},{"./ReactComponent":226,"./ReactMultiChildUpdateTypes":261,"./flattenChildren":314,"./instantiateReactComponent":329,"./shouldUpdateReactComponent":346}],261:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -35113,7 +35734,7 @@ var ReactMultiChildUpdateTypes = keyMirror({
 
 module.exports = ReactMultiChildUpdateTypes;
 
-},{"./keyMirror":327}],253:[function(require,module,exports){
+},{"./keyMirror":336}],262:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014, Facebook, Inc.
@@ -35186,7 +35807,7 @@ var ReactNativeComponent = {
 module.exports = ReactNativeComponent;
 
 }).call(this,require('_process'))
-},{"./Object.assign":209,"./invariant":321,"_process":4}],254:[function(require,module,exports){
+},{"./Object.assign":218,"./invariant":330,"_process":4}],263:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -35342,7 +35963,7 @@ var ReactOwner = {
 module.exports = ReactOwner;
 
 }).call(this,require('_process'))
-},{"./emptyObject":303,"./invariant":321,"_process":4}],255:[function(require,module,exports){
+},{"./emptyObject":312,"./invariant":330,"_process":4}],264:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -35426,7 +36047,7 @@ function _noMeasure(objName, fnName, func) {
 module.exports = ReactPerf;
 
 }).call(this,require('_process'))
-},{"_process":4}],256:[function(require,module,exports){
+},{"_process":4}],265:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -35593,7 +36214,7 @@ var ReactPropTransferer = {
 module.exports = ReactPropTransferer;
 
 }).call(this,require('_process'))
-},{"./Object.assign":209,"./emptyFunction":302,"./invariant":321,"./joinClasses":326,"./warning":341,"_process":4}],257:[function(require,module,exports){
+},{"./Object.assign":218,"./emptyFunction":311,"./invariant":330,"./joinClasses":335,"./warning":350,"_process":4}],266:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -35621,7 +36242,7 @@ if ("production" !== process.env.NODE_ENV) {
 module.exports = ReactPropTypeLocationNames;
 
 }).call(this,require('_process'))
-},{"_process":4}],258:[function(require,module,exports){
+},{"_process":4}],267:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -35645,7 +36266,7 @@ var ReactPropTypeLocations = keyMirror({
 
 module.exports = ReactPropTypeLocations;
 
-},{"./keyMirror":327}],259:[function(require,module,exports){
+},{"./keyMirror":336}],268:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -35999,7 +36620,7 @@ function getPreciseType(propValue) {
 
 module.exports = ReactPropTypes;
 
-},{"./ReactElement":238,"./ReactPropTypeLocationNames":257,"./deprecated":301,"./emptyFunction":302}],260:[function(require,module,exports){
+},{"./ReactElement":247,"./ReactPropTypeLocationNames":266,"./deprecated":310,"./emptyFunction":311}],269:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -36055,7 +36676,7 @@ PooledClass.addPoolingTo(ReactPutListenerQueue);
 
 module.exports = ReactPutListenerQueue;
 
-},{"./Object.assign":209,"./PooledClass":210,"./ReactBrowserEventEmitter":213}],261:[function(require,module,exports){
+},{"./Object.assign":218,"./PooledClass":219,"./ReactBrowserEventEmitter":222}],270:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -36231,7 +36852,7 @@ PooledClass.addPoolingTo(ReactReconcileTransaction);
 
 module.exports = ReactReconcileTransaction;
 
-},{"./CallbackQueue":187,"./Object.assign":209,"./PooledClass":210,"./ReactBrowserEventEmitter":213,"./ReactInputSelection":245,"./ReactPutListenerQueue":260,"./Transaction":288}],262:[function(require,module,exports){
+},{"./CallbackQueue":196,"./Object.assign":218,"./PooledClass":219,"./ReactBrowserEventEmitter":222,"./ReactInputSelection":254,"./ReactPutListenerQueue":269,"./Transaction":297}],271:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -36262,7 +36883,7 @@ var ReactRootIndex = {
 
 module.exports = ReactRootIndex;
 
-},{}],263:[function(require,module,exports){
+},{}],272:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -36342,7 +36963,7 @@ module.exports = {
 };
 
 }).call(this,require('_process'))
-},{"./ReactElement":238,"./ReactInstanceHandles":246,"./ReactMarkupChecksum":249,"./ReactServerRenderingTransaction":264,"./instantiateReactComponent":320,"./invariant":321,"_process":4}],264:[function(require,module,exports){
+},{"./ReactElement":247,"./ReactInstanceHandles":255,"./ReactMarkupChecksum":258,"./ReactServerRenderingTransaction":273,"./instantiateReactComponent":329,"./invariant":330,"_process":4}],273:[function(require,module,exports){
 /**
  * Copyright 2014, Facebook, Inc.
  * All rights reserved.
@@ -36455,7 +37076,7 @@ PooledClass.addPoolingTo(ReactServerRenderingTransaction);
 
 module.exports = ReactServerRenderingTransaction;
 
-},{"./CallbackQueue":187,"./Object.assign":209,"./PooledClass":210,"./ReactPutListenerQueue":260,"./Transaction":288,"./emptyFunction":302}],265:[function(require,module,exports){
+},{"./CallbackQueue":196,"./Object.assign":218,"./PooledClass":219,"./ReactPutListenerQueue":269,"./Transaction":297,"./emptyFunction":311}],274:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -36561,7 +37182,7 @@ ReactStateSetters.Mixin = {
 
 module.exports = ReactStateSetters;
 
-},{}],266:[function(require,module,exports){
+},{}],275:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -36973,7 +37594,7 @@ for (eventType in topLevelTypes) {
 
 module.exports = ReactTestUtils;
 
-},{"./EventConstants":197,"./EventPluginHub":199,"./EventPropagators":202,"./Object.assign":209,"./React":211,"./ReactBrowserEventEmitter":213,"./ReactElement":238,"./ReactMount":250,"./ReactTextComponent":267,"./ReactUpdates":271,"./SyntheticEvent":280}],267:[function(require,module,exports){
+},{"./EventConstants":206,"./EventPluginHub":208,"./EventPropagators":211,"./Object.assign":218,"./React":220,"./ReactBrowserEventEmitter":222,"./ReactElement":247,"./ReactMount":259,"./ReactTextComponent":276,"./ReactUpdates":280,"./SyntheticEvent":289}],276:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -37079,7 +37700,7 @@ ReactTextComponentFactory.type = ReactTextComponent;
 
 module.exports = ReactTextComponentFactory;
 
-},{"./DOMPropertyOperations":193,"./Object.assign":209,"./ReactComponent":217,"./ReactElement":238,"./escapeTextForBrowser":304}],268:[function(require,module,exports){
+},{"./DOMPropertyOperations":202,"./Object.assign":218,"./ReactComponent":226,"./ReactElement":247,"./escapeTextForBrowser":313}],277:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -37180,7 +37801,7 @@ var ReactTransitionChildMapping = {
 
 module.exports = ReactTransitionChildMapping;
 
-},{"./ReactChildren":216}],269:[function(require,module,exports){
+},{"./ReactChildren":225}],278:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -37291,7 +37912,7 @@ var ReactTransitionEvents = {
 
 module.exports = ReactTransitionEvents;
 
-},{"./ExecutionEnvironment":203}],270:[function(require,module,exports){
+},{"./ExecutionEnvironment":212}],279:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -37480,7 +38101,7 @@ var ReactTransitionGroup = React.createClass({
 
 module.exports = ReactTransitionGroup;
 
-},{"./Object.assign":209,"./React":211,"./ReactTransitionChildMapping":268,"./cloneWithProps":294,"./emptyFunction":302}],271:[function(require,module,exports){
+},{"./Object.assign":218,"./React":220,"./ReactTransitionChildMapping":277,"./cloneWithProps":303,"./emptyFunction":311}],280:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -37770,7 +38391,7 @@ var ReactUpdates = {
 module.exports = ReactUpdates;
 
 }).call(this,require('_process'))
-},{"./CallbackQueue":187,"./Object.assign":209,"./PooledClass":210,"./ReactCurrentOwner":222,"./ReactPerf":255,"./Transaction":288,"./invariant":321,"./warning":341,"_process":4}],272:[function(require,module,exports){
+},{"./CallbackQueue":196,"./Object.assign":218,"./PooledClass":219,"./ReactCurrentOwner":231,"./ReactPerf":264,"./Transaction":297,"./invariant":330,"./warning":350,"_process":4}],281:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -37824,7 +38445,7 @@ if ("production" !== process.env.NODE_ENV) {
 module.exports = React;
 
 }).call(this,require('_process'))
-},{"./LinkedStateMixin":205,"./React":211,"./ReactCSSTransitionGroup":214,"./ReactComponentWithPureRenderMixin":219,"./ReactDefaultPerf":236,"./ReactTestUtils":266,"./ReactTransitionGroup":270,"./ReactUpdates":271,"./cloneWithProps":294,"./cx":299,"./update":340,"_process":4}],273:[function(require,module,exports){
+},{"./LinkedStateMixin":214,"./React":220,"./ReactCSSTransitionGroup":223,"./ReactComponentWithPureRenderMixin":228,"./ReactDefaultPerf":245,"./ReactTestUtils":275,"./ReactTransitionGroup":279,"./ReactUpdates":280,"./cloneWithProps":303,"./cx":308,"./update":349,"_process":4}],282:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -37916,7 +38537,7 @@ var SVGDOMPropertyConfig = {
 
 module.exports = SVGDOMPropertyConfig;
 
-},{"./DOMProperty":192}],274:[function(require,module,exports){
+},{"./DOMProperty":201}],283:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -38111,7 +38732,7 @@ var SelectEventPlugin = {
 
 module.exports = SelectEventPlugin;
 
-},{"./EventConstants":197,"./EventPropagators":202,"./ReactInputSelection":245,"./SyntheticEvent":280,"./getActiveElement":308,"./isTextInputElement":324,"./keyOf":328,"./shallowEqual":336}],275:[function(require,module,exports){
+},{"./EventConstants":206,"./EventPropagators":211,"./ReactInputSelection":254,"./SyntheticEvent":289,"./getActiveElement":317,"./isTextInputElement":333,"./keyOf":337,"./shallowEqual":345}],284:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -38142,7 +38763,7 @@ var ServerReactRootIndex = {
 
 module.exports = ServerReactRootIndex;
 
-},{}],276:[function(require,module,exports){
+},{}],285:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -38570,7 +39191,7 @@ var SimpleEventPlugin = {
 module.exports = SimpleEventPlugin;
 
 }).call(this,require('_process'))
-},{"./EventConstants":197,"./EventPluginUtils":201,"./EventPropagators":202,"./SyntheticClipboardEvent":277,"./SyntheticDragEvent":279,"./SyntheticEvent":280,"./SyntheticFocusEvent":281,"./SyntheticKeyboardEvent":283,"./SyntheticMouseEvent":284,"./SyntheticTouchEvent":285,"./SyntheticUIEvent":286,"./SyntheticWheelEvent":287,"./getEventCharCode":309,"./invariant":321,"./keyOf":328,"./warning":341,"_process":4}],277:[function(require,module,exports){
+},{"./EventConstants":206,"./EventPluginUtils":210,"./EventPropagators":211,"./SyntheticClipboardEvent":286,"./SyntheticDragEvent":288,"./SyntheticEvent":289,"./SyntheticFocusEvent":290,"./SyntheticKeyboardEvent":292,"./SyntheticMouseEvent":293,"./SyntheticTouchEvent":294,"./SyntheticUIEvent":295,"./SyntheticWheelEvent":296,"./getEventCharCode":318,"./invariant":330,"./keyOf":337,"./warning":350,"_process":4}],286:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -38616,7 +39237,7 @@ SyntheticEvent.augmentClass(SyntheticClipboardEvent, ClipboardEventInterface);
 module.exports = SyntheticClipboardEvent;
 
 
-},{"./SyntheticEvent":280}],278:[function(require,module,exports){
+},{"./SyntheticEvent":289}],287:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -38662,7 +39283,7 @@ SyntheticEvent.augmentClass(
 module.exports = SyntheticCompositionEvent;
 
 
-},{"./SyntheticEvent":280}],279:[function(require,module,exports){
+},{"./SyntheticEvent":289}],288:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -38701,7 +39322,7 @@ SyntheticMouseEvent.augmentClass(SyntheticDragEvent, DragEventInterface);
 
 module.exports = SyntheticDragEvent;
 
-},{"./SyntheticMouseEvent":284}],280:[function(require,module,exports){
+},{"./SyntheticMouseEvent":293}],289:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -38859,7 +39480,7 @@ PooledClass.addPoolingTo(SyntheticEvent, PooledClass.threeArgumentPooler);
 
 module.exports = SyntheticEvent;
 
-},{"./Object.assign":209,"./PooledClass":210,"./emptyFunction":302,"./getEventTarget":312}],281:[function(require,module,exports){
+},{"./Object.assign":218,"./PooledClass":219,"./emptyFunction":311,"./getEventTarget":321}],290:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -38898,7 +39519,7 @@ SyntheticUIEvent.augmentClass(SyntheticFocusEvent, FocusEventInterface);
 
 module.exports = SyntheticFocusEvent;
 
-},{"./SyntheticUIEvent":286}],282:[function(require,module,exports){
+},{"./SyntheticUIEvent":295}],291:[function(require,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  * All rights reserved.
@@ -38945,7 +39566,7 @@ SyntheticEvent.augmentClass(
 module.exports = SyntheticInputEvent;
 
 
-},{"./SyntheticEvent":280}],283:[function(require,module,exports){
+},{"./SyntheticEvent":289}],292:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -39032,7 +39653,7 @@ SyntheticUIEvent.augmentClass(SyntheticKeyboardEvent, KeyboardEventInterface);
 
 module.exports = SyntheticKeyboardEvent;
 
-},{"./SyntheticUIEvent":286,"./getEventCharCode":309,"./getEventKey":310,"./getEventModifierState":311}],284:[function(require,module,exports){
+},{"./SyntheticUIEvent":295,"./getEventCharCode":318,"./getEventKey":319,"./getEventModifierState":320}],293:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -39115,7 +39736,7 @@ SyntheticUIEvent.augmentClass(SyntheticMouseEvent, MouseEventInterface);
 
 module.exports = SyntheticMouseEvent;
 
-},{"./SyntheticUIEvent":286,"./ViewportMetrics":289,"./getEventModifierState":311}],285:[function(require,module,exports){
+},{"./SyntheticUIEvent":295,"./ViewportMetrics":298,"./getEventModifierState":320}],294:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -39163,7 +39784,7 @@ SyntheticUIEvent.augmentClass(SyntheticTouchEvent, TouchEventInterface);
 
 module.exports = SyntheticTouchEvent;
 
-},{"./SyntheticUIEvent":286,"./getEventModifierState":311}],286:[function(require,module,exports){
+},{"./SyntheticUIEvent":295,"./getEventModifierState":320}],295:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -39225,7 +39846,7 @@ SyntheticEvent.augmentClass(SyntheticUIEvent, UIEventInterface);
 
 module.exports = SyntheticUIEvent;
 
-},{"./SyntheticEvent":280,"./getEventTarget":312}],287:[function(require,module,exports){
+},{"./SyntheticEvent":289,"./getEventTarget":321}],296:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -39286,7 +39907,7 @@ SyntheticMouseEvent.augmentClass(SyntheticWheelEvent, WheelEventInterface);
 
 module.exports = SyntheticWheelEvent;
 
-},{"./SyntheticMouseEvent":284}],288:[function(require,module,exports){
+},{"./SyntheticMouseEvent":293}],297:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -39527,7 +40148,7 @@ var Transaction = {
 module.exports = Transaction;
 
 }).call(this,require('_process'))
-},{"./invariant":321,"_process":4}],289:[function(require,module,exports){
+},{"./invariant":330,"_process":4}],298:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -39559,7 +40180,7 @@ var ViewportMetrics = {
 
 module.exports = ViewportMetrics;
 
-},{"./getUnboundedScrollPosition":317}],290:[function(require,module,exports){
+},{"./getUnboundedScrollPosition":326}],299:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014, Facebook, Inc.
@@ -39625,7 +40246,7 @@ function accumulateInto(current, next) {
 module.exports = accumulateInto;
 
 }).call(this,require('_process'))
-},{"./invariant":321,"_process":4}],291:[function(require,module,exports){
+},{"./invariant":330,"_process":4}],300:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -39659,7 +40280,7 @@ function adler32(data) {
 
 module.exports = adler32;
 
-},{}],292:[function(require,module,exports){
+},{}],301:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -39691,7 +40312,7 @@ function camelize(string) {
 
 module.exports = camelize;
 
-},{}],293:[function(require,module,exports){
+},{}],302:[function(require,module,exports){
 /**
  * Copyright 2014, Facebook, Inc.
  * All rights reserved.
@@ -39733,7 +40354,7 @@ function camelizeStyleName(string) {
 
 module.exports = camelizeStyleName;
 
-},{"./camelize":292}],294:[function(require,module,exports){
+},{"./camelize":301}],303:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -39792,7 +40413,7 @@ function cloneWithProps(child, props) {
 module.exports = cloneWithProps;
 
 }).call(this,require('_process'))
-},{"./ReactElement":238,"./ReactPropTransferer":256,"./keyOf":328,"./warning":341,"_process":4}],295:[function(require,module,exports){
+},{"./ReactElement":247,"./ReactPropTransferer":265,"./keyOf":337,"./warning":350,"_process":4}],304:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -39836,7 +40457,7 @@ function containsNode(outerNode, innerNode) {
 
 module.exports = containsNode;
 
-},{"./isTextNode":325}],296:[function(require,module,exports){
+},{"./isTextNode":334}],305:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -39922,7 +40543,7 @@ function createArrayFrom(obj) {
 
 module.exports = createArrayFrom;
 
-},{"./toArray":338}],297:[function(require,module,exports){
+},{"./toArray":347}],306:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -39983,7 +40604,7 @@ function createFullPageComponent(tag) {
 module.exports = createFullPageComponent;
 
 }).call(this,require('_process'))
-},{"./ReactCompositeComponent":220,"./ReactElement":238,"./invariant":321,"_process":4}],298:[function(require,module,exports){
+},{"./ReactCompositeComponent":229,"./ReactElement":247,"./invariant":330,"_process":4}],307:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -40073,7 +40694,7 @@ function createNodesFromMarkup(markup, handleScript) {
 module.exports = createNodesFromMarkup;
 
 }).call(this,require('_process'))
-},{"./ExecutionEnvironment":203,"./createArrayFrom":296,"./getMarkupWrap":313,"./invariant":321,"_process":4}],299:[function(require,module,exports){
+},{"./ExecutionEnvironment":212,"./createArrayFrom":305,"./getMarkupWrap":322,"./invariant":330,"_process":4}],308:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -40112,7 +40733,7 @@ function cx(classNames) {
 
 module.exports = cx;
 
-},{}],300:[function(require,module,exports){
+},{}],309:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -40170,7 +40791,7 @@ function dangerousStyleValue(name, value) {
 
 module.exports = dangerousStyleValue;
 
-},{"./CSSProperty":185}],301:[function(require,module,exports){
+},{"./CSSProperty":194}],310:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -40221,7 +40842,7 @@ function deprecated(namespace, oldName, newName, ctx, fn) {
 module.exports = deprecated;
 
 }).call(this,require('_process'))
-},{"./Object.assign":209,"./warning":341,"_process":4}],302:[function(require,module,exports){
+},{"./Object.assign":218,"./warning":350,"_process":4}],311:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -40255,7 +40876,7 @@ emptyFunction.thatReturnsArgument = function(arg) { return arg; };
 
 module.exports = emptyFunction;
 
-},{}],303:[function(require,module,exports){
+},{}],312:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -40279,7 +40900,7 @@ if ("production" !== process.env.NODE_ENV) {
 module.exports = emptyObject;
 
 }).call(this,require('_process'))
-},{"_process":4}],304:[function(require,module,exports){
+},{"_process":4}],313:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -40320,7 +40941,7 @@ function escapeTextForBrowser(text) {
 
 module.exports = escapeTextForBrowser;
 
-},{}],305:[function(require,module,exports){
+},{}],314:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -40389,7 +41010,7 @@ function flattenChildren(children) {
 module.exports = flattenChildren;
 
 }).call(this,require('_process'))
-},{"./ReactTextComponent":267,"./traverseAllChildren":339,"./warning":341,"_process":4}],306:[function(require,module,exports){
+},{"./ReactTextComponent":276,"./traverseAllChildren":348,"./warning":350,"_process":4}],315:[function(require,module,exports){
 /**
  * Copyright 2014, Facebook, Inc.
  * All rights reserved.
@@ -40418,7 +41039,7 @@ function focusNode(node) {
 
 module.exports = focusNode;
 
-},{}],307:[function(require,module,exports){
+},{}],316:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -40449,7 +41070,7 @@ var forEachAccumulated = function(arr, cb, scope) {
 
 module.exports = forEachAccumulated;
 
-},{}],308:[function(require,module,exports){
+},{}],317:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -40478,7 +41099,7 @@ function getActiveElement() /*?DOMElement*/ {
 
 module.exports = getActiveElement;
 
-},{}],309:[function(require,module,exports){
+},{}],318:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -40530,7 +41151,7 @@ function getEventCharCode(nativeEvent) {
 
 module.exports = getEventCharCode;
 
-},{}],310:[function(require,module,exports){
+},{}],319:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -40635,7 +41256,7 @@ function getEventKey(nativeEvent) {
 
 module.exports = getEventKey;
 
-},{"./getEventCharCode":309}],311:[function(require,module,exports){
+},{"./getEventCharCode":318}],320:[function(require,module,exports){
 /**
  * Copyright 2013 Facebook, Inc.
  * All rights reserved.
@@ -40682,7 +41303,7 @@ function getEventModifierState(nativeEvent) {
 
 module.exports = getEventModifierState;
 
-},{}],312:[function(require,module,exports){
+},{}],321:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -40713,7 +41334,7 @@ function getEventTarget(nativeEvent) {
 
 module.exports = getEventTarget;
 
-},{}],313:[function(require,module,exports){
+},{}],322:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -40830,7 +41451,7 @@ function getMarkupWrap(nodeName) {
 module.exports = getMarkupWrap;
 
 }).call(this,require('_process'))
-},{"./ExecutionEnvironment":203,"./invariant":321,"_process":4}],314:[function(require,module,exports){
+},{"./ExecutionEnvironment":212,"./invariant":330,"_process":4}],323:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -40905,7 +41526,7 @@ function getNodeForCharacterOffset(root, offset) {
 
 module.exports = getNodeForCharacterOffset;
 
-},{}],315:[function(require,module,exports){
+},{}],324:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -40940,7 +41561,7 @@ function getReactRootElementInContainer(container) {
 
 module.exports = getReactRootElementInContainer;
 
-},{}],316:[function(require,module,exports){
+},{}],325:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -40977,7 +41598,7 @@ function getTextContentAccessor() {
 
 module.exports = getTextContentAccessor;
 
-},{"./ExecutionEnvironment":203}],317:[function(require,module,exports){
+},{"./ExecutionEnvironment":212}],326:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41017,7 +41638,7 @@ function getUnboundedScrollPosition(scrollable) {
 
 module.exports = getUnboundedScrollPosition;
 
-},{}],318:[function(require,module,exports){
+},{}],327:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41050,7 +41671,7 @@ function hyphenate(string) {
 
 module.exports = hyphenate;
 
-},{}],319:[function(require,module,exports){
+},{}],328:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41091,7 +41712,7 @@ function hyphenateStyleName(string) {
 
 module.exports = hyphenateStyleName;
 
-},{"./hyphenate":318}],320:[function(require,module,exports){
+},{"./hyphenate":327}],329:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -41205,7 +41826,7 @@ function instantiateReactComponent(element, parentCompositeType) {
 module.exports = instantiateReactComponent;
 
 }).call(this,require('_process'))
-},{"./ReactElement":238,"./ReactEmptyComponent":240,"./ReactLegacyElement":247,"./ReactNativeComponent":253,"./warning":341,"_process":4}],321:[function(require,module,exports){
+},{"./ReactElement":247,"./ReactEmptyComponent":249,"./ReactLegacyElement":256,"./ReactNativeComponent":262,"./warning":350,"_process":4}],330:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -41262,7 +41883,7 @@ var invariant = function(condition, format, a, b, c, d, e, f) {
 module.exports = invariant;
 
 }).call(this,require('_process'))
-},{"_process":4}],322:[function(require,module,exports){
+},{"_process":4}],331:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41327,7 +41948,7 @@ function isEventSupported(eventNameSuffix, capture) {
 
 module.exports = isEventSupported;
 
-},{"./ExecutionEnvironment":203}],323:[function(require,module,exports){
+},{"./ExecutionEnvironment":212}],332:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41355,7 +41976,7 @@ function isNode(object) {
 
 module.exports = isNode;
 
-},{}],324:[function(require,module,exports){
+},{}],333:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41399,7 +42020,7 @@ function isTextInputElement(elem) {
 
 module.exports = isTextInputElement;
 
-},{}],325:[function(require,module,exports){
+},{}],334:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41424,7 +42045,7 @@ function isTextNode(object) {
 
 module.exports = isTextNode;
 
-},{"./isNode":323}],326:[function(require,module,exports){
+},{"./isNode":332}],335:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41465,7 +42086,7 @@ function joinClasses(className/*, ... */) {
 
 module.exports = joinClasses;
 
-},{}],327:[function(require,module,exports){
+},{}],336:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -41520,7 +42141,7 @@ var keyMirror = function(obj) {
 module.exports = keyMirror;
 
 }).call(this,require('_process'))
-},{"./invariant":321,"_process":4}],328:[function(require,module,exports){
+},{"./invariant":330,"_process":4}],337:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41556,7 +42177,7 @@ var keyOf = function(oneKeyObj) {
 
 module.exports = keyOf;
 
-},{}],329:[function(require,module,exports){
+},{}],338:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41609,7 +42230,7 @@ function mapObject(object, callback, context) {
 
 module.exports = mapObject;
 
-},{}],330:[function(require,module,exports){
+},{}],339:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41643,7 +42264,7 @@ function memoizeStringOnly(callback) {
 
 module.exports = memoizeStringOnly;
 
-},{}],331:[function(require,module,exports){
+},{}],340:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014, Facebook, Inc.
@@ -41677,7 +42298,7 @@ function monitorCodeUse(eventName, data) {
 module.exports = monitorCodeUse;
 
 }).call(this,require('_process'))
-},{"./invariant":321,"_process":4}],332:[function(require,module,exports){
+},{"./invariant":330,"_process":4}],341:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -41717,7 +42338,7 @@ function onlyChild(children) {
 module.exports = onlyChild;
 
 }).call(this,require('_process'))
-},{"./ReactElement":238,"./invariant":321,"_process":4}],333:[function(require,module,exports){
+},{"./ReactElement":247,"./invariant":330,"_process":4}],342:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41745,7 +42366,7 @@ if (ExecutionEnvironment.canUseDOM) {
 
 module.exports = performance || {};
 
-},{"./ExecutionEnvironment":203}],334:[function(require,module,exports){
+},{"./ExecutionEnvironment":212}],343:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41773,7 +42394,7 @@ var performanceNow = performance.now.bind(performance);
 
 module.exports = performanceNow;
 
-},{"./performance":333}],335:[function(require,module,exports){
+},{"./performance":342}],344:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41851,7 +42472,7 @@ if (ExecutionEnvironment.canUseDOM) {
 
 module.exports = setInnerHTML;
 
-},{"./ExecutionEnvironment":203}],336:[function(require,module,exports){
+},{"./ExecutionEnvironment":212}],345:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41895,7 +42516,7 @@ function shallowEqual(objA, objB) {
 
 module.exports = shallowEqual;
 
-},{}],337:[function(require,module,exports){
+},{}],346:[function(require,module,exports){
 /**
  * Copyright 2013-2014, Facebook, Inc.
  * All rights reserved.
@@ -41933,7 +42554,7 @@ function shouldUpdateReactComponent(prevElement, nextElement) {
 
 module.exports = shouldUpdateReactComponent;
 
-},{}],338:[function(require,module,exports){
+},{}],347:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014, Facebook, Inc.
@@ -42005,7 +42626,7 @@ function toArray(obj) {
 module.exports = toArray;
 
 }).call(this,require('_process'))
-},{"./invariant":321,"_process":4}],339:[function(require,module,exports){
+},{"./invariant":330,"_process":4}],348:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -42188,7 +42809,7 @@ function traverseAllChildren(children, callback, traverseContext) {
 module.exports = traverseAllChildren;
 
 }).call(this,require('_process'))
-},{"./ReactElement":238,"./ReactInstanceHandles":246,"./invariant":321,"_process":4}],340:[function(require,module,exports){
+},{"./ReactElement":247,"./ReactInstanceHandles":255,"./invariant":330,"_process":4}],349:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-2014, Facebook, Inc.
@@ -42356,7 +42977,7 @@ function update(value, spec) {
 module.exports = update;
 
 }).call(this,require('_process'))
-},{"./Object.assign":209,"./invariant":321,"./keyOf":328,"_process":4}],341:[function(require,module,exports){
+},{"./Object.assign":218,"./invariant":330,"./keyOf":337,"_process":4}],350:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014, Facebook, Inc.
@@ -42401,9 +43022,9 @@ if ("production" !== process.env.NODE_ENV) {
 module.exports = warning;
 
 }).call(this,require('_process'))
-},{"./emptyFunction":302,"_process":4}],342:[function(require,module,exports){
+},{"./emptyFunction":311,"_process":4}],351:[function(require,module,exports){
  /*
- * # Semantic UI - 1.6.4
+ * # Semantic UI - 1.7.1
  * https://github.com/Semantic-Org/Semantic-UI
  * http://www.semantic-ui.com/
  *
@@ -42564,7 +43185,7 @@ $.site = $.fn.site = function(parameters) {
             $.fn[name].settings[setting] = value;
             if(modifyExisting && namespace) {
               $existingModules = $(':data(module-' + namespace + ')');
-              if($existingModules.size() > 0) {
+              if($existingModules.length > 0) {
                 module.verbose('Modifying existing settings', $existingModules);
                 $existingModules[name]('setting', setting, value);
               }
@@ -42590,7 +43211,7 @@ $.site = $.fn.site = function(parameters) {
             $.extend(true, $.fn[name].settings, newSettings);
             if(modifyExisting && namespace) {
               $existingModules = $(':data(module-' + namespace + ')');
-              if($existingModules.size() > 0) {
+              if($existingModules.length > 0) {
                 module.verbose('Modifying existing settings', $existingModules);
                 $existingModules[name]('setting', newSettings);
               }
@@ -43062,7 +43683,7 @@ $.fn.form = function(fields, parameters) {
                   .blur()
                 ;
               }
-              if(!event.ctrlKey && key == keyCode.enter && $field.is(selector.input) && $field.not(selector.checkbox).size() > 0 ) {
+              if(!event.ctrlKey && key == keyCode.enter && $field.is(selector.input) && $field.not(selector.checkbox).length > 0 ) {
                 module.debug('Enter key pressed, submitting form');
                 $submit
                   .addClass(className.down)
@@ -43123,13 +43744,13 @@ $.fn.form = function(fields, parameters) {
           },
           field: function(identifier) {
             module.verbose('Finding field with identifier', identifier);
-            if( $field.filter('#' + identifier).size() > 0 ) {
+            if( $field.filter('#' + identifier).length > 0 ) {
               return $field.filter('#' + identifier);
             }
-            else if( $field.filter('[name="' + identifier +'"]').size() > 0 ) {
+            else if( $field.filter('[name="' + identifier +'"]').length > 0 ) {
               return $field.filter('[name="' + identifier +'"]');
             }
-            else if( $field.filter('[data-' + metadata.validate + '="'+ identifier +'"]').size() > 0 ) {
+            else if( $field.filter('[data-' + metadata.validate + '="'+ identifier +'"]').length > 0 ) {
               return $field.filter('[data-' + metadata.validate + '="'+ identifier +'"]');
             }
             return $('<input/>');
@@ -43151,13 +43772,13 @@ $.fn.form = function(fields, parameters) {
 
           field: function(identifier) {
             module.verbose('Checking for existence of a field with identifier', identifier);
-            if( $field.filter('#' + identifier).size() > 0 ) {
+            if( $field.filter('#' + identifier).length > 0 ) {
               return true;
             }
-            else if( $field.filter('[name="' + identifier +'"]').size() > 0 ) {
+            else if( $field.filter('[name="' + identifier +'"]').length > 0 ) {
               return true;
             }
-            else if( $field.filter('[data-' + metadata.validate + '="'+ identifier +'"]').size() > 0 ) {
+            else if( $field.filter('[data-' + metadata.validate + '="'+ identifier +'"]').length > 0 ) {
               return true;
             }
             return false;
@@ -43170,8 +43791,8 @@ $.fn.form = function(fields, parameters) {
             var
               $field       = module.get.field(identifier),
               $fieldGroup  = $field.closest($group),
-              $prompt      = $fieldGroup.find(selector.prompt),
-              promptExists = ($prompt.size() !== 0)
+              $prompt      = $fieldGroup.children(selector.prompt),
+              promptExists = ($prompt.length !== 0)
             ;
             errors = (typeof errors == 'string')
               ? [errors]
@@ -43221,7 +43842,7 @@ $.fn.form = function(fields, parameters) {
             var
               $field      = module.get.field(field.identifier),
               $fieldGroup = $field.closest($group),
-              $prompt     = $fieldGroup.find(selector.prompt)
+              $prompt     = $fieldGroup.children(selector.prompt)
             ;
             $fieldGroup
               .removeClass(className.error)
@@ -43276,7 +43897,7 @@ $.fn.form = function(fields, parameters) {
             if(allValid) {
               module.debug('Form has no validation errors, submitting');
               module.set.success();
-              return $.proxy(settings.onSuccess, element)(event);
+              return settings.onSuccess.call(element, event);
             }
             else {
               module.debug('Form has errors');
@@ -43288,7 +43909,7 @@ $.fn.form = function(fields, parameters) {
               if($module.data('moduleApi') !== undefined) {
                 event.stopImmediatePropagation();
               }
-              return $.proxy(settings.onFailure, element)(formErrors);
+              return settings.onFailure.call(element, formErrors);
             }
           },
 
@@ -43318,12 +43939,12 @@ $.fn.form = function(fields, parameters) {
             }
             if(fieldValid) {
               module.remove.prompt(field, fieldErrors);
-              $.proxy(settings.onValid, $field)();
+              settings.onValid.call($field);
             }
             else {
               formErrors = formErrors.concat(fieldErrors);
               module.add.prompt(field.identifier, fieldErrors);
-              $.proxy(settings.onInvalid, $field)(fieldErrors);
+              settings.onInvalid.call($field, fieldErrors);
               return false;
             }
             return true;
@@ -43346,11 +43967,11 @@ $.fn.form = function(fields, parameters) {
             if(bracket !== undefined && bracket !== null) {
               ancillary    = '' + bracket[1];
               functionType = type.replace(bracket[0], '');
-              isValid      = $.proxy(settings.rules[functionType], element)(value, ancillary);
+              isValid      = settings.rules[functionType].call(element, value, ancillary);
             }
             // normal notation
             else {
-              isValid = $.proxy(settings.rules[type], $field)(value);
+              isValid = settings.rules[type].call($field, value);
             }
             return isValid;
           }
@@ -43440,8 +44061,8 @@ $.fn.form = function(fields, parameters) {
             if(moduleSelector) {
               title += ' \'' + moduleSelector + '\'';
             }
-            if($allModules.size() > 1) {
-              title += ' ' + '(' + $allModules.size() + ')';
+            if($allModules.length > 1) {
+              title += ' ' + '(' + $allModules.length + ')';
             }
             if( (console.group !== undefined || console.table !== undefined) && performance.length > 0) {
               console.groupCollapsed(title);
@@ -43570,7 +44191,7 @@ $.fn.form.settings = {
     group   : '.field',
     checkbox: 'input[type="checkbox"], input[type="radio"]',
     input   : 'input',
-    prompt  : '.prompt',
+    prompt  : '.prompt.label',
     submit  : '.submit'
   },
 
@@ -43608,7 +44229,7 @@ $.fn.form.settings = {
 
     // checkbox checked
     checked: function() {
-      return ($(this).filter(':checked').size() > 0);
+      return ($(this).filter(':checked').length > 0);
     },
 
     // value contains (text)
@@ -43682,13 +44303,13 @@ $.fn.form.settings = {
         $form = $(this),
         matchingValue
       ;
-      if($form.find('#' + fieldIdentifier).size() > 0) {
+      if($form.find('#' + fieldIdentifier).length > 0) {
         matchingValue = $form.find('#' + fieldIdentifier).val();
       }
-      else if($form.find('[name="' + fieldIdentifier +'"]').size() > 0) {
+      else if($form.find('[name="' + fieldIdentifier +'"]').length > 0) {
         matchingValue = $form.find('[name="' + fieldIdentifier + '"]').val();
       }
-      else if( $form.find('[data-validate="'+ fieldIdentifier +'"]').size() > 0 ) {
+      else if( $form.find('[data-validate="'+ fieldIdentifier +'"]').length > 0 ) {
         matchingValue = $form.find('[data-validate="'+ fieldIdentifier +'"]').val();
       }
       return (matchingValue !== undefined)
@@ -43833,7 +44454,7 @@ $.fn.accordion = function(parameters) {
 
         event: {
           click: function() {
-            $.proxy(module.toggle, this)();
+            module.toggle.call(this);
           }
         },
 
@@ -43850,14 +44471,14 @@ $.fn.accordion = function(parameters) {
           module.debug('Toggling visibility of content', $activeTitle);
           if(contentIsOpen) {
             if(settings.collapsible) {
-              $.proxy(module.close, $activeTitle)();
+              module.close.call($activeTitle);
             }
             else {
               module.debug('Cannot close accordion content collapsing is disabled');
             }
           }
           else {
-            $.proxy(module.open, $activeTitle)();
+              module.open.call($activeTitle);
           }
         },
 
@@ -43875,7 +44496,7 @@ $.fn.accordion = function(parameters) {
           if(!currentlyAnimating && !currentlyActive) {
             module.debug('Opening accordion content', $activeTitle);
             if(settings.exclusive) {
-              $.proxy(module.closeOthers, $activeTitle)();
+              module.closeOthers.call($activeTitle);
             }
             $activeTitle
               .addClass(className.active)
@@ -43909,9 +44530,9 @@ $.fn.accordion = function(parameters) {
                 $activeContent
                   .addClass(className.active)
                 ;
-                $.proxy(module.reset.display, this)();
-                $.proxy(settings.onOpen, this)();
-                $.proxy(settings.onChange, this)();
+                module.reset.display.call(this);
+                settings.onOpen.call(this);
+                settings.onChange.call(this);
               })
             ;
           }
@@ -43962,9 +44583,9 @@ $.fn.accordion = function(parameters) {
             $activeContent
               .stop()
               .slideUp(settings.duration, settings.easing, function() {
-                $.proxy(module.reset.display, this)();
-                $.proxy(settings.onClose, this)();
-                $.proxy(settings.onChange, this)();
+                module.reset.display.call(this);
+                settings.onClose.call(this);
+                settings.onChange.call(this);
               })
             ;
           }
@@ -43993,7 +44614,7 @@ $.fn.accordion = function(parameters) {
             $openTitles   = $openTitles.not($nestedTitles);
             $openContents = $openTitles.next($content);
           }
-          if( ($openTitles.size() > 0) ) {
+          if( ($openTitles.length > 0) ) {
             module.debug('Exclusive enabled, closing other content', $openTitles);
             $openTitles
               .removeClass(className.active)
@@ -44025,7 +44646,7 @@ $.fn.accordion = function(parameters) {
               .stop()
               .slideUp(settings.duration , settings.easing, function() {
                 $(this).removeClass(className.active);
-                $.proxy(module.reset.display, this)();
+                module.reset.display.call(this);
               })
             ;
           }
@@ -44346,13 +44967,13 @@ $.fn.checkbox = function(parameters) {
           if( module.is.checked() ) {
             module.set.checked();
             if(settings.fireOnInit) {
-              $.proxy(settings.onChecked, $input.get())();
+              settings.onChecked.call($input.get());
             }
           }
           else {
             module.remove.checked();
             if(settings.fireOnInit) {
-              $.proxy(settings.onUnchecked, $input.get())();
+              settings.onUnchecked.call($input.get());
             }
           }
           module.observeChanges();
@@ -44404,7 +45025,7 @@ $.fn.checkbox = function(parameters) {
             ? module[event]
             : module.toggle
           ;
-          if($element.size() > 0) {
+          if($element.length > 0) {
             module.debug('Attaching checkbox events to element', selector, event);
             $element
               .on('click' + eventNamespace, event)
@@ -44421,6 +45042,7 @@ $.fn.checkbox = function(parameters) {
               key     = event.which,
               keyCode = {
                 enter  : 13,
+                space  : 32,
                 escape : 27
               }
             ;
@@ -44430,9 +45052,9 @@ $.fn.checkbox = function(parameters) {
                 .blur()
               ;
             }
-            if(!event.ctrlKey && key == keyCode.enter) {
+            if(!event.ctrlKey && (key == keyCode.enter || key == keyCode.space)) {
               module.verbose('Enter key pressed, toggling checkbox');
-              $.proxy(module.toggle, this)();
+              module.toggle.call(this);
               event.preventDefault();
             }
           }
@@ -44477,7 +45099,7 @@ $.fn.checkbox = function(parameters) {
 
         create: {
           label: function() {
-            if($input.prevAll(selector.label).size() > 0) {
+            if($input.prevAll(selector.label).length > 0) {
               $input.prev(selector.label).detach().insertAfter($input);
               module.debug('Moving existing label', $label);
             }
@@ -44490,7 +45112,7 @@ $.fn.checkbox = function(parameters) {
 
         has: {
           label: function() {
-            return ($label.size() > 0);
+            return ($label.length > 0);
           }
         },
 
@@ -44527,14 +45149,14 @@ $.fn.checkbox = function(parameters) {
           module.debug('Enabling checkbox functionality');
           $module.removeClass(className.disabled);
           $input.prop('disabled', false);
-          $.proxy(settings.onEnabled, $input.get())();
+          settings.onEnabled.call($input.get());
         },
 
         disable: function() {
           module.debug('Disabling checkbox functionality');
           $module.addClass(className.disabled);
           $input.prop('disabled', 'disabled');
-          $.proxy(settings.onDisabled, $input.get())();
+          settings.onDisabled.call($input.get());
         },
 
         check: function() {
@@ -44544,8 +45166,8 @@ $.fn.checkbox = function(parameters) {
             .trigger('change')
           ;
           module.set.checked();
-          $.proxy(settings.onChange, $input.get())();
-          $.proxy(settings.onChecked, $input.get())();
+          settings.onChange.call($input.get());
+          settings.onChecked.call($input.get());
         },
 
         uncheck: function() {
@@ -44555,8 +45177,8 @@ $.fn.checkbox = function(parameters) {
             .trigger('change')
           ;
           module.remove.checked();
-          $.proxy(settings.onChange, $input.get())();
-          $.proxy(settings.onUnchecked, $input.get())();
+          settings.onChange.call($input.get());
+          settings.onUnchecked.call($input.get());
         },
 
         toggle: function(event) {
@@ -44920,7 +45542,7 @@ $.fn.dimmer = function(parameters) {
         event: {
           click: function(event) {
             module.verbose('Determining if event occured on dimmer', event);
-            if( $dimmer.find(event.target).size() === 0 || $(event.target).is(selector.content) ) {
+            if( $dimmer.find(event.target).length === 0 || $(event.target).is(selector.content) ) {
               module.hide();
               event.stopImmediatePropagation();
             }
@@ -44963,8 +45585,8 @@ $.fn.dimmer = function(parameters) {
           module.debug('Showing dimmer', $dimmer, settings);
           if( (!module.is.dimmed() || module.is.animating()) && module.is.enabled() ) {
             module.animate.show(callback);
-            $.proxy(settings.onShow, element)();
-            $.proxy(settings.onChange, element)();
+            settings.onShow.call(element);
+            settings.onChange.call(element);
           }
           else {
             module.debug('Dimmer is already shown or disabled');
@@ -44979,8 +45601,8 @@ $.fn.dimmer = function(parameters) {
           if( module.is.dimmed() || module.is.animating() ) {
             module.debug('Hiding dimmer', $dimmer);
             module.animate.hide(callback);
-            $.proxy(settings.onHide, element)();
-            $.proxy(settings.onChange, element)();
+            settings.onHide.call(element);
+            settings.onChange.call(element);
           }
           else {
             module.debug('Dimmer is not visible');
@@ -45094,10 +45716,10 @@ $.fn.dimmer = function(parameters) {
         has: {
           dimmer: function() {
             if(settings.dimmerName) {
-              return ($module.children(selector.dimmer).filter('.' + settings.dimmerName).size() > 0);
+              return ($module.children(selector.dimmer).filter('.' + settings.dimmerName).length > 0);
             }
             else {
-              return ( $module.children(selector.dimmer).size() > 0 );
+              return ( $module.children(selector.dimmer).length > 0 );
             }
           }
         },
@@ -45264,8 +45886,8 @@ $.fn.dimmer = function(parameters) {
             if(moduleSelector) {
               title += ' \'' + moduleSelector + '\'';
             }
-            if($allModules.size() > 1) {
-              title += ' ' + '(' + $allModules.size() + ')';
+            if($allModules.length > 1) {
+              title += ' ' + '(' + $allModules.length + ')';
             }
             if( (console.group !== undefined || console.table !== undefined) && performance.length > 0) {
               console.groupCollapsed(title);
@@ -45469,7 +46091,7 @@ $.fn.dropdown = function(parameters) {
         $search         = $module.find(selector.search),
         $input          = $module.find(selector.input),
 
-        $combo = ($module.prev().find(selector.text).size() > 0)
+        $combo = ($module.prev().find(selector.text).length > 0)
           ? $module.prev().find(selector.text)
           : $module.prev(),
 
@@ -45556,12 +46178,9 @@ $.fn.dropdown = function(parameters) {
           query = $search.val();
 
           module.verbose('Searching for query', query);
-
-          if(module.is.searchSelection()) {
-            module.filter(query);
-            if( module.can.show() ) {
-              module.show();
-            }
+          module.filter(query);
+          if(module.is.searchSelection() && module.can.show() ) {
+            module.show();
           }
         },
 
@@ -45588,10 +46207,10 @@ $.fn.dropdown = function(parameters) {
             module.debug('Dropdown initialized on a select', selectValues);
             // see if select exists inside a dropdown
             $input = $module;
-            if($input.parents(selector.dropdown).size() > 0) {
+            if($input.parents(selector.dropdown).length > 0) {
               module.debug('Creating dropdown menu only from template');
               $module = $input.closest(selector.dropdown);
-              if($module.find('.' + className.dropdown).size() === 0) {
+              if($module.find('.' + className.dropdown).length === 0) {
                 $('<div />')
                   .addClass(className.menu)
                   .html( settings.templates.menu( selectValues ))
@@ -45640,16 +46259,16 @@ $.fn.dropdown = function(parameters) {
             ? callback
             : function(){}
           ;
-          if( !module.is.active() && !module.is.allFiltered() ) {
+          if( module.can.show() && !module.is.active() && !module.is.allFiltered() ) {
             module.debug('Showing dropdown');
             module.animate.show(function() {
               if( module.can.click() ) {
                 module.bind.intent();
               }
               module.set.visible();
-              $.proxy(callback, element)();
+              callback.call(element);
             });
-            $.proxy(settings.onShow, element)();
+            settings.onShow.call(element);
           }
         },
 
@@ -45662,9 +46281,9 @@ $.fn.dropdown = function(parameters) {
             module.debug('Hiding dropdown');
             module.animate.hide(function() {
               module.remove.visible();
-              $.proxy(callback, element)();
+              callback.call(element);
             });
-            $.proxy(settings.onHide, element)();
+            settings.onHide.call(element);
           }
         },
 
@@ -45720,6 +46339,7 @@ $.fn.dropdown = function(parameters) {
                 .on('click'     + eventNamespace, selector.search, module.show)
                 .on('focus'     + eventNamespace, selector.search, module.event.searchFocus)
                 .on('blur'      + eventNamespace, selector.search, module.event.searchBlur)
+                .on('click'     + eventNamespace, selector.text, module.event.searchTextFocus)
               ;
             }
             else {
@@ -45784,8 +46404,9 @@ $.fn.dropdown = function(parameters) {
         filter: function(searchTerm) {
           var
             $results       = $(),
-            exactRegExp    = new RegExp('^' + searchTerm, 'igm'),
-            fullTextRegExp = new RegExp(searchTerm, 'ig'),
+            escapedTerm    = module.escape.regExp(searchTerm),
+            exactRegExp    = new RegExp('^' + escapedTerm, 'igm'),
+            fullTextRegExp = new RegExp(escapedTerm, 'ig'),
             allItemsFiltered
           ;
           module.verbose('Searching for matching values');
@@ -45793,8 +46414,8 @@ $.fn.dropdown = function(parameters) {
             .each(function(){
               var
                 $choice = $(this),
-                text    = module.get.choiceText($choice, false),
-                value   = module.get.choiceValue($choice, text)
+                text    = String(module.get.choiceText($choice, false)),
+                value   = String(module.get.choiceValue($choice, text))
               ;
               if( text.match(exactRegExp) || value.match(exactRegExp) ) {
                 $results = $results.add($choice);
@@ -45823,8 +46444,10 @@ $.fn.dropdown = function(parameters) {
           ;
           if( module.is.allFiltered() ) {
             module.debug('All items filtered, hiding dropdown', searchTerm);
-            module.hide();
-            $.proxy(settings.onNoResults, element)(searchTerm);
+            if(module.is.searchSelection()) {
+              module.hide();
+            }
+            settings.onNoResults.call(element, searchTerm);
           }
         },
 
@@ -45869,8 +46492,14 @@ $.fn.dropdown = function(parameters) {
               module.hide();
             }
           },
+          searchTextFocus: function(event) {
+            activated = true;
+            $search.focus();
+          },
           input: function(event) {
-            module.set.filtered();
+            if(module.is.searchSelection()) {
+              module.set.filtered();
+            }
             clearTimeout(module.timer);
             module.timer = setTimeout(module.search, settings.delay.search);
           },
@@ -45887,14 +46516,14 @@ $.fn.dropdown = function(parameters) {
               },
               selectedClass   = className.selected,
               currentIndex    = $visibleItems.index( $selectedItem ),
-              hasSelectedItem = ($selectedItem.size() > 0),
+              hasSelectedItem = ($selectedItem.length > 0),
               $nextItem,
               newIndex
             ;
             // default to activated choice if no selection present
             if(!hasSelectedItem) {
               $selectedItem   = $item.filter('.' + className.active).eq(0);
-              hasSelectedItem = ($selectedItem.size() > 0);
+              hasSelectedItem = ($selectedItem.length > 0);
             }
             // close shortcuts
             if(pressedKey == keys.escape) {
@@ -45910,7 +46539,7 @@ $.fn.dropdown = function(parameters) {
             if(module.is.visible()) {
               if(pressedKey == keys.enter && hasSelectedItem) {
                 module.verbose('Enter key pressed, choosing selected item');
-                $.proxy(module.event.item.click, $selectedItem)(event);
+                module.event.item.click.call($selectedItem, event);
                 event.preventDefault();
                 return false;
               }
@@ -45940,7 +46569,7 @@ $.fn.dropdown = function(parameters) {
                 else {
                   $nextItem = $selectedItem.nextAll(selector.item + ':not(.' + className.filtered + ')').eq(0);
                 }
-                if(currentIndex + 1 < $visibleItems.size() ) {
+                if(currentIndex + 1 < $visibleItems.length ) {
                   module.verbose('Down key pressed, changing active item');
                   $item
                     .removeClass(selectedClass)
@@ -45995,7 +46624,7 @@ $.fn.dropdown = function(parameters) {
                 $currentMenu = $(this).children(selector.menu),
                 $otherMenus  = $(this).siblings(selector.item).children(selector.menu)
               ;
-              if( $currentMenu.size() > 0 ) {
+              if( $currentMenu.length > 0 ) {
                 clearTimeout(module.itemTimer);
                 module.itemTimer = setTimeout(function() {
                   $.each($otherMenus, function() {
@@ -46012,7 +46641,7 @@ $.fn.dropdown = function(parameters) {
               var
                 $currentMenu = $(this).children(selector.menu)
               ;
-              if($currentMenu.size() > 0) {
+              if($currentMenu.length > 0) {
                 clearTimeout(module.itemTimer);
                 module.itemTimer = setTimeout(function() {
                   module.verbose('Hiding sub-menu', $currentMenu);
@@ -46032,8 +46661,8 @@ $.fn.dropdown = function(parameters) {
                   module.remove.searchTerm();
                   module.determine.selectAction(text, value);
                 },
-                openingSubMenu = ($subMenu.size() > 0),
-                isSubItem      = ($subMenu.find($target).size() > 0)
+                openingSubMenu = ($subMenu.length > 0),
+                isSubItem      = ($subMenu.find($target).length > 0)
               ;
               if(isSubItem) {
                 return false;
@@ -46071,7 +46700,7 @@ $.fn.dropdown = function(parameters) {
               ? callback
               : function(){}
             ;
-            if( $(event.target).closest($module).size() === 0 ) {
+            if( $(event.target).closest($module).length === 0 ) {
               module.verbose('Triggering event', callback);
               callback();
               return true;
@@ -46086,7 +46715,7 @@ $.fn.dropdown = function(parameters) {
               ? callback
               : function(){}
             ;
-            if( $(event.target).closest($menu).size() === 0 ) {
+            if( $(event.target).closest($menu).length === 0 ) {
               module.verbose('Triggering event', callback);
               callback();
               return true;
@@ -46151,7 +46780,7 @@ $.fn.dropdown = function(parameters) {
             return $text.text();
           },
           value: function() {
-            return ($input.size() > 0)
+            return ($input.length > 0)
               ? $input.val()
               : $module.data(metadata.value)
             ;
@@ -46162,7 +46791,7 @@ $.fn.dropdown = function(parameters) {
               : settings.preserveHTML
             ;
             if($choice !== undefined) {
-              if($choice.find(selector.menu).size() > 0) {
+              if($choice.find(selector.menu).length > 0) {
                 module.verbose('Retreiving text of element with sub-menu');
                 $choice = $choice.clone();
                 $choice.find(selector.menu).remove();
@@ -46171,8 +46800,8 @@ $.fn.dropdown = function(parameters) {
               return ($choice.data(metadata.text) !== undefined)
                 ? $choice.data(metadata.text)
                 : (preserveHTML)
-                  ? $choice.html()
-                  : $choice.text()
+                  ? $choice.html().trim()
+                  : $choice.text().trim()
               ;
             }
           },
@@ -46181,8 +46810,8 @@ $.fn.dropdown = function(parameters) {
             return ($choice.data(metadata.value) !== undefined)
               ? $choice.data(metadata.value)
               : (typeof choiceText === 'string')
-                ? choiceText.toLowerCase()
-                : choiceText
+                ? choiceText.toLowerCase().trim()
+                : choiceText.trim()
             ;
           },
           inputEvent: function() {
@@ -46311,6 +46940,7 @@ $.fn.dropdown = function(parameters) {
             ;
             module.debug('Restoring default text', defaultText);
             module.set.text(defaultText);
+            $text.addClass(settings.className.placeholder);
           },
           defaultValue: function() {
             var
@@ -46318,8 +46948,14 @@ $.fn.dropdown = function(parameters) {
             ;
             if(defaultValue !== undefined) {
               module.debug('Restoring default value', defaultValue);
-              module.set.selected(defaultValue);
-              module.set.value(defaultValue);
+              if(defaultValue.length) {
+                module.set.selected(defaultValue);
+                module.set.value(defaultValue);
+              }
+              else {
+                module.remove.activeItem();
+                module.remove.selectedItem();
+              }
             }
           }
         },
@@ -46388,7 +47024,7 @@ $.fn.dropdown = function(parameters) {
             ;
 
             $item       = $item || module.get.activeItem();
-            hasActive   = ($item && $item.size() > 0);
+            hasActive   = ($item && $item.length > 0);
             forceScroll = (forceScroll !== undefined)
               ? forceScroll
               : false
@@ -46443,7 +47079,7 @@ $.fn.dropdown = function(parameters) {
           },
           value: function(value) {
             module.debug('Adding selected value to hidden input', value, $input);
-            if($input.size() > 0) {
+            if($input.length > 0) {
               $input
                 .val(value)
                 .trigger('change')
@@ -46478,7 +47114,7 @@ $.fn.dropdown = function(parameters) {
 
               selectedText = module.get.choiceText($selectedItem);
               module.set.text(selectedText);
-              $.proxy(settings.onChange, element)(value, selectedText, $selectedItem);
+              settings.onChange.call(element, value, selectedText, $selectedItem);
             }
           }
         },
@@ -46535,7 +47171,7 @@ $.fn.dropdown = function(parameters) {
             ;
           },
           allFiltered: function() {
-            return ($item.filter('.' + className.filtered).size() === $item.size());
+            return ($item.filter('.' + className.filtered).length === $item.length);
           },
           hidden: function($subMenu) {
             return ($subMenu)
@@ -46547,13 +47183,16 @@ $.fn.dropdown = function(parameters) {
             return $module.hasClass(className.search);
           },
           searchable: function() {
-            return ($search.size() > 0);
+            return ($search.length > 0);
           },
           searchSelection: function() {
             return ( module.is.searchable() && $search.parent().is($module) );
           },
           selection: function() {
             return $module.hasClass(className.selection);
+          },
+          upward: function() {
+            return $module.hasClass(className.upward);
           },
           visible: function($subMenu) {
             return ($subMenu)
@@ -46591,8 +47230,16 @@ $.fn.dropdown = function(parameters) {
             module.set.scrollPosition(module.get.activeItem(), true);
             module.verbose('Doing menu show animation', $currentMenu);
             if( module.is.hidden($currentMenu) || module.is.animating($currentMenu) ) {
+
+              if(settings.transition == 'auto') {
+                settings.transition = module.is.upward()
+                  ? 'slide up'
+                  : 'slide down'
+                ;
+              }
+
               if(settings.transition == 'none') {
-                $.proxy(callback, element)();
+                callback.call(element);
               }
               else if($.fn.transition !== undefined && $module.transition('is supported')) {
                 $currentMenu
@@ -46604,7 +47251,7 @@ $.fn.dropdown = function(parameters) {
                     queue      : true,
                     onStart    : start,
                     onComplete : function() {
-                      $.proxy(callback, element)();
+                      callback.call(element);
                     }
                   })
                 ;
@@ -46623,8 +47270,8 @@ $.fn.dropdown = function(parameters) {
                     }, settings.duration, 'easeOutQuad', module.event.resetStyle)
                     .end()
                   .slideDown(100, 'easeOutQuad', function() {
-                    $.proxy(module.event.resetStyle, this)();
-                    $.proxy(callback, element)();
+                    module.event.resetStyle.call(this);
+                    callback.call(element);
                   })
                 ;
               }
@@ -46634,8 +47281,8 @@ $.fn.dropdown = function(parameters) {
                   .hide()
                   .clearQueue()
                   .fadeIn(settings.duration, function() {
-                    $.proxy(module.event.resetStyle, this)();
-                    $.proxy(callback, element)();
+                    module.event.resetStyle.call(this);
+                    callback.call(element);
                   })
                 ;
               }
@@ -46667,8 +47314,15 @@ $.fn.dropdown = function(parameters) {
             if( module.is.visible($currentMenu) || module.is.animating($currentMenu) ) {
               module.verbose('Doing menu hide animation', $currentMenu);
 
+              if(settings.transition == 'auto') {
+                settings.transition = module.is.upward()
+                  ? 'slide up'
+                  : 'slide down'
+                ;
+              }
+
               if(settings.transition == 'none') {
-                $.proxy(callback, element)();
+                callback.call(element);
               }
               else if($.fn.transition !== undefined && $module.transition('is supported')) {
                 $currentMenu
@@ -46680,7 +47334,7 @@ $.fn.dropdown = function(parameters) {
                     queue      : true,
                     onStart    : start,
                     onComplete : function() {
-                      $.proxy(callback, element)();
+                      callback.call(element);
                     }
                   })
                 ;
@@ -46699,8 +47353,8 @@ $.fn.dropdown = function(parameters) {
                     .end()
                   .delay(50)
                   .slideUp(100, 'easeOutQuad', function() {
-                    $.proxy(module.event.resetStyle, this)();
-                    $.proxy(callback, element)();
+                    module.event.resetStyle.call(this);
+                    callback.call(element);
                   })
                 ;
               }
@@ -46710,8 +47364,8 @@ $.fn.dropdown = function(parameters) {
                   .show()
                   .clearQueue()
                   .fadeOut(150, function() {
-                    $.proxy(module.event.resetStyle, this)();
-                    $.proxy(callback, element)();
+                    module.event.resetStyle.call(this);
+                    callback.call(element);
                   })
                 ;
               }
@@ -46732,6 +47386,13 @@ $.fn.dropdown = function(parameters) {
             module.verbose('Delaying hide event to ensure user intent');
             clearTimeout(module.timer);
             module.timer = setTimeout(module.hide, settings.delay.hide);
+          }
+        },
+
+        escape: {
+          regExp: function(text) {
+            text =  String(text);
+            return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
           }
         },
 
@@ -46935,7 +47596,7 @@ $.fn.dropdown.settings = {
     touch  : 50
   },
 
-  transition : 'slide down',
+  transition : 'auto',
   duration   : 250,
 
   /* Callbacks */
@@ -46984,6 +47645,7 @@ $.fn.dropdown.settings = {
     search      : 'search',
     selected    : 'selected',
     selection   : 'selection',
+    upward      : 'upward',
     visible     : 'visible'
   }
 
@@ -47034,6 +47696,7 @@ $.extend( $.easing, {
 
 
 })( jQuery, window , document );
+
 /*
  * # Semantic - Modal
  * http://github.com/semantic-org/semantic-ui/
@@ -47208,7 +47871,7 @@ $.fn.modal = function(parameters) {
             ? module[event]
             : module.toggle
           ;
-          if($toggle.size() > 0) {
+          if($toggle.length > 0) {
             module.debug('Attaching modal events to element', selector, event);
             $toggle
               .off(eventNamespace)
@@ -47241,7 +47904,7 @@ $.fn.modal = function(parameters) {
           close: function() {
             module.verbose('Closing element pressed');
             if( $(this).is(selector.approve) ) {
-              if($.proxy(settings.onApprove, element)() !== false) {
+              if(settings.onApprove.call(element) !== false) {
                 module.hide();
               }
               else {
@@ -47249,7 +47912,7 @@ $.fn.modal = function(parameters) {
               }
             }
             else if( $(this).is(selector.deny) ) {
-              if($.proxy(settings.onDeny, element)() !== false) {
+              if(settings.onDeny.call(element) !== false) {
                 module.hide();
               }
               else {
@@ -47261,7 +47924,7 @@ $.fn.modal = function(parameters) {
             }
           },
           click: function(event) {
-            if( $(event.target).closest($module).size() === 0 ) {
+            if( $(event.target).closest($module).length === 0 ) {
               module.debug('Dimmer clicked, hiding all modals');
               if( module.is.active() ) {
                 module.remove.clickaway();
@@ -47342,12 +48005,12 @@ $.fn.modal = function(parameters) {
             module.set.type();
             module.set.clickaway();
 
-            if( !settings.allowMultiple && $otherModals.filter(':visible').size() > 0) {
+            if( !settings.allowMultiple && $otherModals.filter(':visible').length > 0) {
               module.debug('Other modals visible, queueing show animation');
               module.hideOthers(module.showModal);
             }
             else {
-              $.proxy(settings.onShow, element)();
+              settings.onShow.call(element);
               if(settings.transition && $.fn.transition !== undefined && $module.transition('is supported')) {
                 module.debug('Showing modal with css animations');
                 $module
@@ -47358,7 +48021,7 @@ $.fn.modal = function(parameters) {
                     duration    : settings.duration,
                     useFailSafe : true,
                     onComplete : function() {
-                      $.proxy(settings.onVisible, element)();
+                      settings.onVisible.apply(element);
                       module.add.keyboardShortcuts();
                       module.save.focus();
                       module.set.active();
@@ -47372,7 +48035,7 @@ $.fn.modal = function(parameters) {
                 module.debug('Showing modal with javascript');
                 $module
                   .fadeIn(settings.duration, settings.easing, function() {
-                    $.proxy(settings.onVisible, element)();
+                    settings.onVisible.apply(element);
                     module.add.keyboardShortcuts();
                     module.save.focus();
                     module.set.active();
@@ -47393,7 +48056,7 @@ $.fn.modal = function(parameters) {
             : function(){}
           ;
           module.debug('Hiding modal');
-          $.proxy(settings.onHide, element)();
+          settings.onHide.call(element);
 
           if( module.is.animating() || module.is.active() ) {
             if(settings.transition && $.fn.transition !== undefined && $module.transition('is supported')) {
@@ -47412,7 +48075,7 @@ $.fn.modal = function(parameters) {
                     module.remove.keyboardShortcuts();
                   },
                   onComplete : function() {
-                    $.proxy(settings.onHidden, element)();
+                    settings.onHidden.call(element);
                     module.restore.focus();
                     callback();
                   }
@@ -47427,7 +48090,7 @@ $.fn.modal = function(parameters) {
               module.remove.keyboardShortcuts();
               $module
                 .fadeOut(settings.duration, settings.easing, function() {
-                  $.proxy(settings.onHidden, element)();
+                  settings.onHidden.call(element);
                   module.restore.focus();
                   callback();
                 })
@@ -47491,7 +48154,7 @@ $.fn.modal = function(parameters) {
         },
 
         othersActive: function() {
-          return ($otherModals.filter('.' + className.active).size() > 0);
+          return ($otherModals.filter('.' + className.active).length > 0);
         },
 
         add: {
@@ -47511,7 +48174,7 @@ $.fn.modal = function(parameters) {
 
         restore: {
           focus: function() {
-            if($focusedElement && $focusedElement.size() > 0) {
+            if($focusedElement && $focusedElement.length > 0) {
               $focusedElement.focus();
             }
           }
@@ -47595,7 +48258,7 @@ $.fn.modal = function(parameters) {
               var
                 $inputs    = $module.find(':input:visible'),
                 $autofocus = $inputs.filter('[autofocus]'),
-                $input     = ($autofocus.size() > 0)
+                $input     = ($autofocus.length > 0)
                   ? $autofocus
                   : $inputs
               ;
@@ -48445,7 +49108,6 @@ $.fn.popup = function(parameters) {
         // binds events
         initialize: function() {
           module.debug('Initializing module', $module);
-          module.refresh();
           if(settings.on == 'click') {
             $module
               .on('click' + eventNamespace, module.toggle)
@@ -48463,11 +49125,8 @@ $.fn.popup = function(parameters) {
           $window
             .on('resize' + eventNamespace, module.event.resize)
           ;
-          if( !module.exists() ) {
+          if( !module.exists() && settings.preserve) {
             module.create();
-          }
-          else if(settings.hoverable) {
-            module.bind.popup();
           }
           module.instantiate();
         },
@@ -48486,29 +49145,31 @@ $.fn.popup = function(parameters) {
           }
           else {
             if(settings.inline) {
-              $popup = $target.next(settings.selector.popup);
+              $popup = $target.next(selector.popup);
             }
           }
           if(settings.popup) {
             $popup.addClass(className.loading);
-            $offsetParent = $module.offsetParent();
-            if($popup.offsetParent()[0] !== $offsetParent[0]) {
+            $offsetParent = module.get.offsetParent();
+            $popup.removeClass(className.loading);
+            if(module.has.popup() && module.get.offsetParent($popup)[0] !== $offsetParent[0]) {
               module.debug('Moving popup to the same offset parent as activating element');
               $popup
                 .detach()
                 .appendTo($offsetParent)
               ;
             }
-            $popup.removeClass(className.loading);
           }
           else {
             $offsetParent = (settings.inline)
-              ? $target.offsetParent()
-              : $body
+              ? module.get.offsetParent($target)
+              : module.has.popup()
+                ? module.get.offsetParent($popup)
+                : $body
             ;
           }
           if( $offsetParent.is('html') ) {
-            module.debug('Page is popups offset parent');
+            module.debug('Setting page as offset parent');
             $offsetParent = $body;
           }
         },
@@ -48603,14 +49264,23 @@ $.fn.popup = function(parameters) {
                 .appendTo( $context )
               ;
             }
+            module.refresh();
             if(settings.hoverable) {
               module.bind.popup();
             }
-            $.proxy(settings.onCreate, $popup)(element);
+            settings.onCreate.call($popup, element);
           }
-          else if($target.next(settings.selector.popup).size() !== 0) {
-            module.verbose('Pre-existing popup found, reverting to inline');
+          else if($target.next(selector.popup).length !== 0) {
+            module.verbose('Pre-existing popup found');
             settings.inline = true;
+            settings.popup  = $target.next(selector.popup);
+            module.refresh();
+            if(settings.hoverable) {
+              module.bind.popup();
+            }
+          }
+          else if(settings.popup) {
+            module.verbose('Used popup specified in settings');
             module.refresh();
             if(settings.hoverable) {
               module.bind.popup();
@@ -48639,11 +49309,11 @@ $.fn.popup = function(parameters) {
         show: function(callback) {
           callback = $.isFunction(callback) ? callback : function(){};
           module.debug('Showing pop-up', settings.transition);
-          if(!settings.preserve && !settings.popup) {
-            module.refresh();
-          }
           if( !module.exists() ) {
             module.create();
+          }
+          else if(!settings.preserve && !settings.popup) {
+            module.refresh();
           }
           if( $popup && module.set.position() ) {
             module.save.conditions();
@@ -48665,13 +49335,13 @@ $.fn.popup = function(parameters) {
         hideAll: function() {
           $(selector.popup)
             .filter(':visible')
-              .popup('hide')
+              .transition('hide')
           ;
         },
 
         hideGracefully: function(event) {
           // don't close on clicks inside popup
-          if(event && $(event.target).closest(selector.popup).size() === 0) {
+          if(event && $(event.target).closest(selector.popup).length === 0) {
             module.debug('Click occurred outside popup hiding popup');
             module.hide();
           }
@@ -48688,7 +49358,7 @@ $.fn.popup = function(parameters) {
             return ( module.has.popup() );
           }
           else {
-            return ( $popup.closest($context).size() > 1 )
+            return ( $popup.closest($context).length >= 1 )
               ? true
               : false
             ;
@@ -48697,10 +49367,11 @@ $.fn.popup = function(parameters) {
 
         removePopup: function() {
           module.debug('Removing popup', $popup);
-          if( module.has.popup() ) {
+          if( module.has.popup() && !settings.popup) {
             $popup.remove();
+            $popup = undefined;
           }
-          $.proxy(settings.onRemove, $popup)(element);
+          settings.onRemove.call($popup, element);
         },
 
         save: {
@@ -48716,7 +49387,6 @@ $.fn.popup = function(parameters) {
         },
         restore: {
           conditions: function() {
-            element.blur();
             if(module.cache && module.cache.title) {
               $module.attr('title', module.cache.title);
               module.verbose('Restoring original attributes', module.cache.title);
@@ -48738,8 +49408,8 @@ $.fn.popup = function(parameters) {
                   duration   : settings.duration,
                   onComplete : function() {
                     module.bind.close();
-                    $.proxy(callback, $popup)(element);
-                    $.proxy(settings.onVisible, $popup)(element);
+                    callback.call($popup, element);
+                    settings.onVisible.call($popup, element);
                   }
                 })
               ;
@@ -48750,11 +49420,12 @@ $.fn.popup = function(parameters) {
                 .stop()
                 .fadeIn(settings.duration, settings.easing, function() {
                   module.bind.close();
-                  $.proxy(callback, element)();
+                  callback.call($popup, element);
+                  settings.onVisible.call($popup, element);
                 })
               ;
             }
-            $.proxy(settings.onShow, $popup)(element);
+            settings.onShow.call($popup, element);
           },
           hide: function(callback) {
             callback = $.isFunction(callback) ? callback : function(){};
@@ -48769,8 +49440,8 @@ $.fn.popup = function(parameters) {
                   verbose    : settings.verbose,
                   onComplete : function() {
                     module.reset();
-                    $.proxy(callback, $popup)(element);
-                    $.proxy(settings.onHidden, $popup)(element);
+                    callback.call($popup, element);
+                    settings.onHidden.call($popup, element);
                   }
                 })
               ;
@@ -48780,11 +49451,12 @@ $.fn.popup = function(parameters) {
                 .stop()
                 .fadeOut(settings.duration, settings.easing, function() {
                   module.reset();
-                  callback();
+                  callback.call($popup, element);
+                  settings.onHidden.call($popup, element);
                 })
               ;
             }
-            $.proxy(settings.onHide, $popup)(element);
+            settings.onHide.call($popup, element);
           }
         },
 
@@ -48807,9 +49479,35 @@ $.fn.popup = function(parameters) {
             }
             return false;
           },
+          offsetParent: function($target) {
+            var
+              element = ($target !== undefined)
+                ? $target[0]
+                : $module[0],
+              parentNode = element.parentNode,
+              $node    = $(parentNode)
+            ;
+            if(parentNode) {
+              var
+                is2D     = ($node.css('transform') === 'none'),
+                isStatic = ($node.css('position') === 'static'),
+                isHTML   = $node.is('html')
+              ;
+              while(parentNode && !isHTML && isStatic && is2D) {
+                parentNode = parentNode.parentNode;
+                $node    = $(parentNode);
+                is2D     = ($node.css('transform') === 'none');
+                isStatic = ($node.css('position') === 'static');
+                isHTML   = $node.is('html');
+              }
+            }
+            return ($node && $node.length > 0)
+              ? $node
+              : $()
+            ;
+          },
           offstagePosition: function(position) {
             var
-              position = position || false,
               boundary  = {
                 top    : $(window).scrollTop(),
                 bottom : $(window).scrollTop() + $(window).height(),
@@ -48824,6 +49522,7 @@ $.fn.popup = function(parameters) {
               offstage  = {},
               offstagePositions = []
             ;
+            position = position || false;
             if(popup.offset && position) {
               module.verbose('Checking if outside viewable area', popup.offset);
               offstage = {
@@ -48938,13 +49637,14 @@ $.fn.popup = function(parameters) {
                 ? parseInt( window.getComputedStyle(targetElement).getPropertyValue('margin-top'), 10)
                 : 0,
               marginLeft    = (settings.inline)
-                ? parseInt( window.getComputedStyle(targetElement).getPropertyValue('margin-left'), 10)
+                ? parseInt( window.getComputedStyle(targetElement).getPropertyValue(module.is.rtl() ? 'margin-right' : 'margin-left'), 10)
                 : 0,
 
               target        = (settings.inline || settings.popup)
                 ? $target.position()
                 : $target.offset(),
 
+              computedPosition,
               positioning,
               offstagePosition
             ;
@@ -48972,7 +49672,18 @@ $.fn.popup = function(parameters) {
               }
             }
             module.debug('Calculating popup positioning', position);
-            switch(position) {
+
+            computedPosition = position;
+            if (module.is.rtl()) {
+              computedPosition = computedPosition.replace(/left|right/g, function (match) {
+                return (match == 'left')
+                  ? 'right'
+                  : 'left'
+                ;
+              });
+              module.debug('RTL: Popup positioning updated', computedPosition);
+            }
+            switch (computedPosition) {
               case 'top left':
                 positioning = {
                   top    : 'auto',
@@ -49134,7 +49845,7 @@ $.fn.popup = function(parameters) {
               $document
                 .on('click' + eventNamespace, function(event) {
                   module.verbose('Pop-up clickaway intent detected');
-                  $.proxy(module.hideGracefully, element)(event);
+                  module.hideGracefully.call(element, event);
                 })
               ;
             }
@@ -49162,7 +49873,7 @@ $.fn.popup = function(parameters) {
 
         has: {
           popup: function() {
-            return ($popup.size() > 0);
+            return ($popup && $popup.length > 0);
           }
         },
 
@@ -49181,12 +49892,15 @@ $.fn.popup = function(parameters) {
           },
           hidden: function() {
             return !module.is.visible();
+          },
+          rtl: function () {
+            return $module.css('direction') == 'rtl';
           }
         },
 
         reset: function() {
           module.remove.visible();
-          if(settings.preserve || settings.popup) {
+          if(settings.preserve) {
             if($.fn.transition !== undefined) {
               $popup
                 .transition('remove transition')
@@ -49415,7 +50129,7 @@ $.fn.popup.settings = {
   target         : false,
   popup          : false,
   inline         : false,
-  preserve       : true,
+  preserve       : false,
   hoverable      : false,
 
   duration       : 200,
@@ -49696,12 +50410,16 @@ $.fn.progress = function(parameters) {
               total   = module.total                || 0,
               percent = (module.is.visible() && animating)
                 ? module.get.displayPercent()
-                : module.percent || 0
+                : module.percent || 0,
+              left = (module.total > 0)
+                ? (total - value)
+                : (100 - percent)
             ;
             templateText = templateText || '';
             templateText = templateText
               .replace('{value}', value)
               .replace('{total}', total)
+              .replace('{left}', left)
               .replace('{percent}', percent)
             ;
             module.debug('Adding variables to progress bar text', templateText);
@@ -49874,7 +50592,7 @@ $.fn.progress = function(parameters) {
             if(module.total) {
               module.value = Math.round( (percent / 100) * module.total);
             }
-            if(settings.limitValues) {
+            else if(settings.limitValues) {
               module.value = (module.value > 100)
                 ? 100
                 : (module.value < 0)
@@ -49890,15 +50608,17 @@ $.fn.progress = function(parameters) {
             settings.onChange.call(element, percent, module.value, module.total);
           },
           labelInterval: function() {
-            clearInterval(module.interval);
-            $bar
-              .one(transitionEnd + eventNamespace, function() {
+            var
+              animationCallback = function() {
                 module.verbose('Bar finished animating, removing continuous label updates');
                 clearInterval(module.interval);
                 animating = false;
                 module.set.labels();
-              })
+              }
             ;
+            clearInterval(module.interval);
+            $bar.one(transitionEnd + eventNamespace, animationCallback);
+            module.timer = setTimeout(animationCallback, settings.duration + 100);
             animating = true;
             module.interval = setInterval(module.set.labels, settings.framerate);
           },
@@ -50346,7 +51066,7 @@ $.fn.rating = function(parameters) {
         initialize: function() {
           module.verbose('Initializing rating module', settings);
 
-          if($icon.size() === 0) {
+          if($icon.length === 0) {
             module.setup.layout();
           }
 
@@ -50434,7 +51154,7 @@ $.fn.rating = function(parameters) {
               currentRating = module.getRating(),
               rating        = $icon.index($activeIcon) + 1,
               canClear      = (settings.clearable == 'auto')
-               ? ($icon.size() === 1)
+               ? ($icon.length === 1)
                : settings.clearable
             ;
             if(canClear && currentRating == rating) {
@@ -50453,7 +51173,7 @@ $.fn.rating = function(parameters) {
 
         getRating: function() {
           var
-            currentRating = $icon.filter('.' + className.active).size()
+            currentRating = $icon.filter('.' + className.active).length
           ;
           module.verbose('Current rating retrieved', currentRating);
           return currentRating;
@@ -50503,7 +51223,7 @@ $.fn.rating = function(parameters) {
                 .addClass(className.active)
             ;
           }
-          $.proxy(settings.onRate, element)(rating);
+          settings.onRate.call(element, rating);
         },
 
         setting: function(name, value) {
@@ -50591,8 +51311,8 @@ $.fn.rating = function(parameters) {
             if(moduleSelector) {
               title += ' \'' + moduleSelector + '\'';
             }
-            if($allModules.size() > 1) {
-              title += ' ' + '(' + $allModules.size() + ')';
+            if($allModules.length > 1) {
+              title += ' ' + '(' + $allModules.length + ')';
             }
             if( (console.group !== undefined || console.table !== undefined) && performance.length > 0) {
               console.groupCollapsed(title);
@@ -50807,7 +51527,7 @@ $.fn.search = function(parameters) {
           ;
           if(settings.automatic) {
             $prompt
-              .on(inputEvent + eventNamespace, module.search.throttle)
+              .on(inputEvent + eventNamespace, module.throttle)
             ;
           }
           $prompt
@@ -50816,12 +51536,12 @@ $.fn.search = function(parameters) {
             .on('keydown' + eventNamespace, module.handleKeyboard)
           ;
           $searchButton
-            .on('click' + eventNamespace, module.search.query)
+            .on('click' + eventNamespace, module.query)
           ;
           $results
-            .on('mousedown' + eventNamespace, module.event.mousedown)
-            .on('mouseup' + eventNamespace, module.event.mouseup)
-            .on('click' + eventNamespace, selector.result, module.results.select)
+            .on('mousedown' + eventNamespace, module.event.result.mousedown)
+            .on('mouseup' + eventNamespace, module.event.result.mouseup)
+            .on('click' + eventNamespace, selector.result, module.event.result.click)
           ;
           module.instantiate();
         },
@@ -50853,24 +51573,57 @@ $.fn.search = function(parameters) {
               .addClass(className.focus)
             ;
             clearTimeout(module.timer);
-            module.search.throttle();
-            if(module.has.minimum())  {
-              module.results.show();
+            module.throttle();
+            if( module.has.minimumCharacters() ) {
+              module.showResults();
             }
           },
-          mousedown: function() {
-            module.resultsClicked = true;
-          },
-          mouseup: function() {
-            module.resultsClicked = false;
-          },
           blur: function(event) {
-            module.search.cancel();
+            module.cancel();
             $module
               .removeClass(className.focus)
             ;
             if(!module.resultsClicked) {
-              module.timer = setTimeout(module.results.hide, settings.hideDelay);
+              module.timer = setTimeout(module.hideResults, settings.hideDelay);
+            }
+          },
+          result: {
+            mousedown: function() {
+              module.resultsClicked = true;
+            },
+            mouseup: function() {
+              module.resultsClicked = false;
+            },
+            click: function(event) {
+              module.debug('Search result selected');
+              var
+                $result = $(this),
+                $title  = $result.find('.title'),
+                title   = $title.html()
+              ;
+              if(settings.onSelect == 'default' || settings.onSelect.call(this, event) == 'default') {
+                var
+                  $link  = $result.find('a[href]').eq(0),
+                  $title = $result.find(selector.title).eq(0),
+                  href   = $link.attr('href') || false,
+                  target = $link.attr('target') || false,
+                  name   = ($title.length > 0)
+                    ? $title.text()
+                    : false
+                ;
+                module.hideResults();
+                if(name) {
+                  $prompt.val(name);
+                }
+                if(href) {
+                  if(target == '_blank' || event.ctrlKey) {
+                    window.open(href);
+                  }
+                  else {
+                    window.location.href = (href);
+                  }
+                }
+              }
             }
           }
         },
@@ -50889,7 +51642,7 @@ $.fn.search = function(parameters) {
             },
             activeClass  = className.active,
             currentIndex = $result.index( $result.filter('.' + activeClass) ),
-            resultSize   = $result.size(),
+            resultSize   = $result.length,
             newIndex
           ;
           // search shortcuts
@@ -50900,11 +51653,11 @@ $.fn.search = function(parameters) {
             ;
           }
           // result shortcuts
-          if($results.filter(':visible').size() > 0) {
+          if($results.filter(':visible').length > 0) {
             if(keyCode == keys.enter) {
               module.verbose('Enter key pressed, selecting active result');
-              if( $result.filter('.' + activeClass).size() > 0 ) {
-                $.proxy(module.results.select, $result.filter('.' + activeClass) )(event);
+              if( $result.filter('.' + activeClass).length > 0 ) {
+                module.event.result.click.call($result.filter('.' + activeClass), event);
                 event.preventDefault();
                 return false;
               }
@@ -50950,7 +51703,7 @@ $.fn.search = function(parameters) {
             // query shortcuts
             if(keyCode == keys.enter) {
               module.verbose('Enter key pressed, executing query');
-              module.search.query();
+              module.query();
               $searchButton
                 .addClass(className.down)
               ;
@@ -50964,64 +51717,39 @@ $.fn.search = function(parameters) {
             }
           }
         },
-        has: {
-          minimum: function() {
-            var
-              searchTerm    = $prompt.val(),
-              numCharacters = searchTerm.length
-            ;
-            return (numCharacters >= settings.minCharacters);
+
+        query: function() {
+          var
+            searchTerm = $prompt.val(),
+            cachedHTML = module.read.cache(searchTerm)
+          ;
+          if(cachedHTML) {
+            module.debug('Reading result for ' + searchTerm + ' from cache');
+            module.addResults(cachedHTML);
+          }
+          else {
+            module.debug('Querying for ' + searchTerm);
+            if($.isPlainObject(settings.source) || $.isArray(settings.source)) {
+              module.search.local(searchTerm);
+            }
+            else if(settings.apiSettings) {
+              module.search.remote(searchTerm);
+            }
+            else if($.fn.api !== undefined && $.api.settings.api.search !== undefined) {
+              module.debug('Searching with default search API endpoint');
+              settings.apiSettings = {
+                action: 'search'
+              };
+              module.search.remote(searchTerm);
+            }
+            else {
+              module.error(error.source);
+            }
+            settings.onSearchQuery.call(element, searchTerm);
           }
         },
+
         search: {
-          cancel: function() {
-            var
-              xhr = $module.data('xhr') || false
-            ;
-            if( xhr && xhr.state() != 'resolved') {
-              module.debug('Cancelling last search');
-              xhr.abort();
-            }
-          },
-          throttle: function() {
-            clearTimeout(module.timer);
-            if(module.has.minimum())  {
-              module.timer = setTimeout(module.search.query, settings.searchDelay);
-            }
-            else {
-              module.results.hide();
-            }
-          },
-          query: function() {
-            var
-              searchTerm = $prompt.val(),
-              cachedHTML = module.search.cache.read(searchTerm)
-            ;
-            if(cachedHTML) {
-              module.debug("Reading result for '" + searchTerm + "' from cache");
-              module.results.add(cachedHTML);
-            }
-            else {
-              module.debug("Querying for '" + searchTerm + "'");
-              if($.isPlainObject(settings.source) || $.isArray(settings.source)) {
-                module.search.local(searchTerm);
-              }
-              else if(settings.apiSettings) {
-                module.search.remote(searchTerm);
-              }
-              else if($.fn.api !== undefined && $.api.settings.api.search !== undefined) {
-                module.debug('Searching with default search API endpoint');
-                settings.apiSettings = {
-                  action: 'search'
-                };
-                module.search.remote(searchTerm);
-              }
-              else {
-                module.error(error.source);
-              }
-              $.proxy(settings.onSearchQuery, $module)(searchTerm);
-            }
-          },
           local: function(searchTerm) {
             var
               results   = [],
@@ -51053,14 +51781,14 @@ $.fn.search = function(parameters) {
                 }
               });
             });
-            searchHTML = module.results.generate({
+            searchHTML = module.generateResults({
               results: $.merge(results, fullTextResults)
             });
             $module
               .removeClass(className.loading)
             ;
-            module.search.cache.write(searchTerm, searchHTML);
-            module.results.add(searchHTML);
+            module.write.cache(searchTerm, searchHTML);
+            module.addResults(searchHTML);
           },
           remote: function(searchTerm) {
             var
@@ -51070,160 +51798,163 @@ $.fn.search = function(parameters) {
                   query: searchTerm
                 },
                 onSuccess : function(response) {
-                  searchHTML = module.results.generate(response);
-                  module.search.cache.write(searchTerm, searchHTML);
-                  module.results.add(searchHTML);
+                  searchHTML = module.generateResults(response);
+                  module.write.cache(searchTerm, searchHTML);
+                  module.addResults(searchHTML);
                 },
                 onFailure : module.error
               },
               searchHTML
             ;
-            module.search.cancel();
+            module.cancel();
             module.debug('Executing search');
             $.extend(true, apiSettings, settings.apiSettings);
             $.api(apiSettings);
-          },
+          }
 
-          cache: {
-            read: function(name) {
-              var
-                cache = $module.data('cache')
-              ;
-              return (settings.cache && (typeof cache == 'object') && (cache[name] !== undefined) )
-                ? cache[name]
-                : false
-              ;
-            },
-            write: function(name, value) {
-              var
-                cache = ($module.data('cache') !== undefined)
-                  ? $module.data('cache')
-                  : {}
-              ;
-              cache[name] = value;
-              $module
-                .data('cache', cache)
-              ;
-            }
+        },
+
+        throttle: function() {
+          clearTimeout(module.timer);
+          if(module.has.minimumCharacters())  {
+            module.timer = setTimeout(module.query, settings.searchDelay);
+          }
+          else {
+            module.hideResults();
           }
         },
 
-        results: {
-          generate: function(response) {
-            module.debug('Generating html from response', response);
+        cancel: function() {
+          var
+            xhr = $module.data('xhr') || false
+          ;
+          if( xhr && xhr.state() != 'resolved') {
+            module.debug('Cancelling last search');
+            xhr.abort();
+          }
+        },
+
+        has: {
+          minimumCharacters: function() {
             var
-              template = settings.templates[settings.type],
-              html     = ''
+              searchTerm    = $prompt.val(),
+              numCharacters = searchTerm.length
             ;
-            if(($.isPlainObject(response.results) && !$.isEmptyObject(response.results)) || ($.isArray(response.results) && response.results.length > 0) ) {
-              if(settings.maxResults > 0) {
-                response.results = $.isArray(response.results)
-                  ? response.results.slice(0, settings.maxResults)
-                  : response.results
-                ;
-              }
-              if($.isFunction(template)) {
-                html = template(response);
-              }
-              else {
-                module.error(error.noTemplate, false);
-              }
+            return (numCharacters >= settings.minCharacters);
+          }
+        },
+
+        read: {
+          cache: function(name) {
+            var
+              cache = $module.data('cache')
+            ;
+            return (settings.cache && (typeof cache == 'object') && (cache[name] !== undefined) )
+              ? cache[name]
+              : false
+            ;
+          }
+        },
+
+        write: {
+          cache: function(name, value) {
+            var
+              cache = ($module.data('cache') !== undefined)
+                ? $module.data('cache')
+                : {}
+            ;
+            cache[name] = value;
+            $module
+              .data('cache', cache)
+            ;
+          }
+        },
+
+        addResults: function(html) {
+          if(settings.onResultsAdd == 'default' || settings.onResultsAdd.call($results, html) == 'default') {
+            $results
+              .html(html)
+            ;
+          }
+          module.showResults();
+        },
+
+        showResults: function() {
+          if( ($results.filter(':visible').length === 0) && ($prompt.filter(':focus').length > 0) && $results.html() !== '') {
+            if(settings.transition && $.fn.transition !== undefined && $module.transition('is supported') && !$results.transition('is inward')) {
+              module.debug('Showing results with css animations');
+              $results
+                .transition({
+                  animation  : settings.transition + ' in',
+                  duration   : settings.duration,
+                  queue      : true
+                })
+              ;
             }
             else {
-              html = module.message(error.noResults, 'empty');
-            }
-            $.proxy(settings.onResults, $module)(response);
-            return html;
-          },
-          add: function(html) {
-            if(settings.onResultsAdd == 'default' || $.proxy(settings.onResultsAdd, $results)(html) == 'default') {
+              module.debug('Showing results with javascript');
               $results
-                .html(html)
+                .stop()
+                .fadeIn(settings.duration, settings.easing)
               ;
             }
-            module.results.show();
-          },
-          show: function() {
-            if( ($results.filter(':visible').size() === 0) && ($prompt.filter(':focus').size() > 0) && $results.html() !== '') {
-              if(settings.transition && $.fn.transition !== undefined && $module.transition('is supported') && !$results.transition('is inward')) {
-                module.debug('Showing results with css animations');
-                $results
-                  .transition({
-                    animation  : settings.transition + ' in',
-                    duration   : settings.duration,
-                    queue      : true
-                  })
-                ;
-              }
-              else {
-                module.debug('Showing results with javascript');
-                $results
-                  .stop()
-                  .fadeIn(settings.duration, settings.easing)
-                ;
-              }
-              $.proxy(settings.onResultsOpen, $results)();
-            }
-          },
-          hide: function() {
-            if($results.filter(':visible').size() > 0) {
-              if(settings.transition && $.fn.transition !== undefined && $module.transition('is supported') && !$results.transition('is outward')) {
-                module.debug('Hiding results with css animations');
-                $results
-                  .transition({
-                    animation  : settings.transition + ' out',
-                    duration   : settings.duration,
-                    queue      : true
-                  })
-                ;
-              }
-              else {
-                module.debug('Hiding results with javascript');
-                $results
-                  .stop()
-                  .fadeIn(settings.duration, settings.easing)
-                ;
-              }
-              $.proxy(settings.onResultsClose, $results)();
-            }
-          },
-          select: function(event) {
-            module.debug('Search result selected');
-            var
-              $result = $(this),
-              $title  = $result.find('.title'),
-              title   = $title.html()
-            ;
-            if(settings.onSelect == 'default' || $.proxy(settings.onSelect, this)(event) == 'default') {
-              var
-                $link  = $result.find('a[href]').eq(0),
-                $title = $result.find(selector.title).eq(0),
-                href   = $link.attr('href') || false,
-                target = $link.attr('target') || false,
-                name   = ($title.size() > 0)
-                  ? $title.text()
-                  : false
+            settings.onResultsOpen.call($results);
+          }
+        },
+        hideResults: function() {
+          if($results.filter(':visible').length > 0) {
+            if(settings.transition && $.fn.transition !== undefined && $module.transition('is supported') && !$results.transition('is outward')) {
+              module.debug('Hiding results with css animations');
+              $results
+                .transition({
+                  animation  : settings.transition + ' out',
+                  duration   : settings.duration,
+                  queue      : true
+                })
               ;
-              module.results.hide();
-              if(name) {
-                $prompt.val(name);
-              }
-              if(href) {
-                if(target == '_blank' || event.ctrlKey) {
-                  window.open(href);
-                }
-                else {
-                  window.location.href = (href);
-                }
-              }
             }
+            else {
+              module.debug('Hiding results with javascript');
+              $results
+                .stop()
+                .fadeIn(settings.duration, settings.easing)
+              ;
+            }
+            settings.onResultsClose.call($results);
           }
         },
 
-        // displays mesage visibly in search results
-        message: function(text, type) {
+        generateResults: function(response) {
+          module.debug('Generating html from response', response);
+          var
+            template = settings.templates[settings.type],
+            html     = ''
+          ;
+          if(($.isPlainObject(response.results) && !$.isEmptyObject(response.results)) || ($.isArray(response.results) && response.results.length > 0) ) {
+            if(settings.maxResults > 0) {
+              response.results = $.isArray(response.results)
+                ? response.results.slice(0, settings.maxResults)
+                : response.results
+              ;
+            }
+            if($.isFunction(template)) {
+              html = template(response);
+            }
+            else {
+              module.error(error.noTemplate, false);
+            }
+          }
+          else {
+            html = module.displayMessage(error.noResults, 'empty');
+          }
+          settings.onResults.call(element, response);
+          return html;
+        },
+
+        displayMessage: function(text, type) {
           type = type || 'standard';
-          module.results.add( settings.templates.message(text, type) );
+          module.debug('Displaying message', text, type);
+          module.addResults( settings.templates.message(text, type) );
           return settings.templates.message(text, type);
         },
 
@@ -51311,8 +52042,8 @@ $.fn.search = function(parameters) {
             if(moduleSelector) {
               title += ' \'' + moduleSelector + '\'';
             }
-            if($allModules.size() > 1) {
-              title += ' ' + '(' + $allModules.size() + ')';
+            if($allModules.length > 1) {
+              title += ' ' + '(' + $allModules.length + ')';
             }
             if( (console.group !== undefined || console.table !== undefined) && performance.length > 0) {
               console.groupCollapsed(title);
@@ -51744,7 +52475,7 @@ $.fn.shape = function(parameters) {
             module.reset();
             module.set.active();
           };
-          $.proxy(settings.beforeChange, $nextSide[0])();
+          settings.beforeChange.call($nextSide.get());
           if(module.get.transitionEvent()) {
             module.verbose('Starting CSS animation');
             $module
@@ -51818,7 +52549,7 @@ $.fn.shape = function(parameters) {
 
           defaultSide: function() {
             $activeSide = $module.find('.' + settings.className.active);
-            $nextSide   = ( $activeSide.next(selector.side).size() > 0 )
+            $nextSide   = ( $activeSide.next(selector.side).length > 0 )
               ? $activeSide.next(selector.side)
               : $module.find(selector.side).first()
             ;
@@ -51851,7 +52582,7 @@ $.fn.shape = function(parameters) {
               $activeSide = $clone.find('.' + settings.className.active),
               $nextSide   = (nextIndex)
                 ? $clone.find(selector.side).eq(nextIndex)
-                : ( $activeSide.next(selector.side).size() > 0 )
+                : ( $activeSide.next(selector.side).length > 0 )
                   ? $activeSide.next(selector.side)
                   : $clone.find(selector.side).first(),
               newSize = {}
@@ -51874,7 +52605,7 @@ $.fn.shape = function(parameters) {
             nextIndex = selector;
             $nextSide = $side.filter(selector);
             nextIndex = $side.index($nextSide);
-            if($nextSide.size() === 0) {
+            if($nextSide.length === 0) {
               module.set.defaultSide();
               module.error(error.side);
             }
@@ -51889,7 +52620,7 @@ $.fn.shape = function(parameters) {
             $nextSide
               .addClass(className.active)
             ;
-            $.proxy(settings.onChange, $nextSide[0])();
+            settings.onChange.call($nextSide.get());
             module.set.defaultSide();
           }
         },
@@ -52087,7 +52818,7 @@ $.fn.shape = function(parameters) {
           },
 
           nextSide: function() {
-            return ( $activeSide.next(selector.side).size() > 0 )
+            return ( $activeSide.next(selector.side).length > 0 )
               ? $activeSide.next(selector.side)
               : $module.find(selector.side).first()
             ;
@@ -52312,8 +53043,8 @@ $.fn.shape = function(parameters) {
             if(moduleSelector) {
               title += ' \'' + moduleSelector + '\'';
             }
-            if($allModules.size() > 1) {
-              title += ' ' + '(' + $allModules.size() + ')';
+            if($allModules.length > 1) {
+              title += ' ' + '(' + $allModules.length + ')';
             }
             if( (console.group !== undefined || console.table !== undefined) && performance.length > 0) {
               console.groupCollapsed(title);
@@ -52474,20 +53205,20 @@ $.fn.shape.settings = {
 
 $.fn.sidebar = function(parameters) {
   var
-    $allModules    = $(this),
-    $window        = $(window),
-    $document      = $(document),
-    $html          = $('html'),
-    $head          = $('head'),
+    $allModules     = $(this),
+    $window         = $(window),
+    $document       = $(document),
+    $html           = $('html'),
+    $head           = $('head'),
 
-    moduleSelector = $allModules.selector || '',
+    moduleSelector  = $allModules.selector || '',
 
-    time           = new Date().getTime(),
-    performance    = [],
+    time            = new Date().getTime(),
+    performance     = [],
 
-    query          = arguments[0],
-    methodInvoked  = (typeof query == 'string'),
-    queryArguments = [].slice.call(arguments, 1),
+    query           = arguments[0],
+    methodInvoked   = (typeof query == 'string'),
+    queryArguments  = [].slice.call(arguments, 1),
 
     requestAnimationFrame = window.requestAnimationFrame
       || window.mozRequestAnimationFrame
@@ -52552,7 +53283,12 @@ $.fn.sidebar = function(parameters) {
           }
 
           // avoids locking rendering if initialized in onReady
-          requestAnimationFrame(module.setup.layout);
+          if(settings.delaySetup) {
+            requestAnimationFrame(module.setup.layout);
+          }
+          else {
+            module.setup.layout();
+          }
 
           module.instantiate();
         },
@@ -52588,7 +53324,7 @@ $.fn.sidebar = function(parameters) {
 
         event: {
           clickaway: function(event) {
-            if( $(event.target).closest(selector.sidebar).size() === 0 ) {
+            if( $(event.target).closest(selector.sidebar).length === 0 ) {
               module.verbose('User clicked on dimmed page');
               module.hide();
             }
@@ -52605,7 +53341,7 @@ $.fn.sidebar = function(parameters) {
             }
           },
           scroll: function(event) {
-            if( $(event.target).closest(selector.sidebar).size() === 0 ) {
+            if( $(event.target).closest(selector.sidebar).length === 0 ) {
               event.preventDefault();
             }
           }
@@ -52651,73 +53387,78 @@ $.fn.sidebar = function(parameters) {
         },
 
         add: {
-          bodyCSS: function(direction, distance) {
+          bodyCSS: function() {
             var
-              width  = $module.outerWidth(),
-              height = $module.outerHeight(),
+              width     = $module.outerWidth(),
+              height    = $module.outerHeight(),
+              direction = module.get.direction(),
+              distance  = {
+                left   : width,
+                right  : -width,
+                top    : height,
+                bottom : -height
+              },
               style
             ;
-            style  = ''
-              + '<style title="' + namespace + '">'
-              + ' .ui.visible.left.sidebar ~ .fixed,'
-              + ' .ui.visible.left.sidebar ~ .pusher {'
-              + '   -webkit-transform: translate3d('+ width + 'px, 0, 0);'
-              + '           transform: translate3d('+ width + 'px, 0, 0);'
-              + ' }'
-              + ' .ui.visible.right.sidebar ~ .fixed,'
-              + ' .ui.visible.right.sidebar ~ .pusher {'
-              + '   -webkit-transform: translate3d(-'+ width + 'px, 0, 0);'
-              + '           transform: translate3d(-'+ width + 'px, 0, 0);'
-              + ' }'
-              + ' .ui.visible.left.sidebar ~ .ui.visible.right.sidebar ~ .fixed,'
-              + ' .ui.visible.left.sidebar ~ .ui.visible.right.sidebar ~ .pusher,'
-              + ' .ui.visible.right.sidebar ~ .ui.visible.left.sidebar ~ .fixed,'
-              + ' .ui.visible.right.sidebar ~ .ui.visible.left.sidebar ~ .pusher {'
-              + '   -webkit-transform: translate3d(0px, 0, 0);'
-              + '           transform: translate3d(0px, 0, 0);'
-              + ' }'
-              + ' .ui.visible.top.sidebar ~ .fixed,'
-              + ' .ui.visible.top.sidebar ~ .pusher {'
-              + '   -webkit-transform: translate3d(0, ' + height + 'px, 0);'
-              + '           transform: translate3d(0, ' + height + 'px, 0);'
-              + ' }'
-              + ' .ui.visible.bottom.sidebar ~ .fixed,'
-              + ' .ui.visible.bottom.sidebar ~ .pusher {'
-              + '   -webkit-transform: translate3d(0, -' + height + 'px, 0);'
-              + '           transform: translate3d(0, -' + height + 'px, 0);'
-              + ' }'
-            ;
+            if( module.is.rtl() ){
+              module.verbose('RTL detected, flipping widths');
+              distance.left = -width;
+              distance.right = width;
+            }
+
+            style  = '<style title="' + namespace + '">';
+
+            if(direction === 'left' || direction === 'right') {
+              module.debug('Adding CSS rules for animation distance', width);
+              style  += ''
+                + ' .ui.visible.' + direction + '.sidebar ~ .fixed,'
+                + ' .ui.visible.' + direction + '.sidebar ~ .pusher {'
+                + '   -webkit-transform: translate3d('+ distance[direction] + 'px, 0, 0);'
+                + '           transform: translate3d('+ distance[direction] + 'px, 0, 0);'
+                + ' }'
+              ;
+            }
+            else if(direction === 'top' || direction == 'bottom') {
+              style  += ''
+                + ' .ui.visible.' + direction + '.sidebar ~ .fixed,'
+                + ' .ui.visible.' + direction + '.sidebar ~ .pusher {'
+                + '   -webkit-transform: translate3d(0, ' + distance[direction] + 'px, 0);'
+                + '           transform: translate3d(0, ' + distance[direction] + 'px, 0);'
+                + ' }'
+              ;
+            }
 
             /* IE is only browser not to create context with transforms */
             /* https://www.w3.org/Bugs/Public/show_bug.cgi?id=16328 */
             if( module.is.ie() ) {
+              if(direction === 'left' || direction === 'right') {
+                module.debug('Adding CSS rules for animation distance', width);
+                style  += ''
+                  + ' .ui.visible.' + direction + '.sidebar ~ .pusher:after {'
+                  + '   -webkit-transform: translate3d('+ distance[direction] + 'px, 0, 0);'
+                  + '           transform: translate3d('+ distance[direction] + 'px, 0, 0);'
+                  + ' }'
+                ;
+              }
+              else if(direction === 'top' || direction == 'bottom') {
+                style  += ''
+                  + ' .ui.visible.' + direction + '.sidebar ~ .pusher:after {'
+                  + '   -webkit-transform: translate3d(0, ' + distance[direction] + 'px, 0);'
+                  + '           transform: translate3d(0, ' + distance[direction] + 'px, 0);'
+                  + ' }'
+                ;
+              }
+              /* opposite sides visible forces content overlay */
               style += ''
-                + ' .ui.visible.left.sidebar ~ .pusher:after {'
-                + '   -webkit-transform: translate3d('+ width + 'px, 0, 0);'
-                + '           transform: translate3d('+ width + 'px, 0, 0);'
-                + ' }'
-                + ' .ui.visible.right.sidebar ~ .pusher:after {'
-                + '   -webkit-transform: translate3d(-'+ width + 'px, 0, 0);'
-                + '           transform: translate3d(-'+ width + 'px, 0, 0);'
-                + ' }'
                 + ' .ui.visible.left.sidebar ~ .ui.visible.right.sidebar ~ .pusher:after,'
                 + ' .ui.visible.right.sidebar ~ .ui.visible.left.sidebar ~ .pusher:after {'
                 + '   -webkit-transform: translate3d(0px, 0, 0);'
                 + '           transform: translate3d(0px, 0, 0);'
                 + ' }'
-                + ' .ui.visible.top.sidebar ~ .pusher:after {'
-                + '   -webkit-transform: translate3d(0, ' + height + 'px, 0);'
-                + '           transform: translate3d(0, ' + height + 'px, 0);'
-                + ' }'
-                + ' .ui.visible.bottom.sidebar ~ .pusher:after {'
-                + '   -webkit-transform: translate3d(0, -' + height + 'px, 0);'
-                + '           transform: translate3d(0, -' + height + 'px, 0);'
-                + ' }'
               ;
             }
 
-           style += '</style>';
-
+            style += '</style>';
             $head.append(style);
             $style = $('style[title=' + namespace + ']');
             module.debug('Adding sizing css to head', $style);
@@ -52746,7 +53487,7 @@ $.fn.sidebar = function(parameters) {
 
         setup: {
           layout: function() {
-            if( $context.children(selector.pusher).size() === 0 ) {
+            if( $context.children(selector.pusher).length === 0 ) {
               module.debug('Adding wrapper element for sidebar');
               module.error(error.pusher);
               $pusher = $('<div class="pusher" />');
@@ -52758,7 +53499,7 @@ $.fn.sidebar = function(parameters) {
               ;
               module.refresh();
             }
-            if($module.nextAll(selector.pusher).size() === 0 || $module.nextAll(selector.pusher)[0] !== $pusher[0]) {
+            if($module.nextAll(selector.pusher).length === 0 || $module.nextAll(selector.pusher)[0] !== $pusher[0]) {
               module.debug('Moved sidebar to correct parent element');
               module.error(error.movedSidebar, element);
               $module.detach().prependTo($context);
@@ -52777,7 +53518,7 @@ $.fn.sidebar = function(parameters) {
             ? module[event]
             : module.toggle
           ;
-          if($toggle.size() > 0) {
+          if($toggle.length > 0) {
             module.debug('Attaching sidebar events to element', selector, event);
             $toggle
               .on('click' + eventNamespace, event)
@@ -52805,18 +53546,19 @@ $.fn.sidebar = function(parameters) {
               settings.transition = 'overlay';
             }
             module.refresh();
-            if(module.othersVisible() && module.get.transition() != 'overlay') {
-              module.debug('Other sidebars currently open');
+            if(module.othersActive() && module.get.transition() !== 'overlay') {
+              module.debug('Other sidebars currently visible');
+              settings.transition = 'overlay';
               if(settings.exclusive) {
                 module.hideOthers();
               }
             }
             animateMethod(function() {
-              $.proxy(callback, element)();
-              $.proxy(settings.onShow, element)();
+              callback.call(element);
+              settings.onShow.call(element);
             });
-            $.proxy(settings.onChange, element)();
-            $.proxy(settings.onVisible, element)();
+            settings.onChange.call(element);
+            settings.onVisible.call(element);
           }
           else {
             module.debug('Sidebar is already visible');
@@ -52837,25 +53579,32 @@ $.fn.sidebar = function(parameters) {
             module.debug('Hiding sidebar', callback);
             module.refreshSidebars();
             animateMethod(function() {
-              $.proxy(callback, element)();
-              $.proxy(settings.onHidden, element)();
+              callback.call(element);
+              settings.onHidden.call(element);
             });
-            $.proxy(settings.onChange, element)();
-            $.proxy(settings.onHide, element)();
+            settings.onChange.call(element);
+            settings.onHide.call(element);
           }
         },
 
+        othersAnimating: function() {
+          return ($sidebars.not($module).filter('.' + className.animating).length > 0);
+        },
         othersVisible: function() {
-          return ($sidebars.not($module).filter('.' + className.visible).size() > 0);
+          return ($sidebars.not($module).filter('.' + className.visible).length > 0);
+        },
+        othersActive: function() {
+          return(module.othersVisible() || module.othersAnimating());
         },
 
         hideOthers: function(callback) {
           var
             $otherSidebars = $sidebars.not($module).filter('.' + className.visible),
-            callback       = callback || function(){},
-            sidebarCount   = $otherSidebars.size(),
+            sidebarCount   = $otherSidebars.length,
             callbackCount  = 0
           ;
+          callback       = callback || function(){};
+
           $otherSidebars
             .sidebar('hide', function() {
               callbackCount++;
@@ -52881,7 +53630,7 @@ $.fn.sidebar = function(parameters) {
             transition = module.get.transition(),
             $transition = (transition == 'safe')
               ? $context
-              : (transition == 'overlay' || module.othersVisible())
+              : (transition === 'overlay' || module.othersActive())
                 ? $module
                 : $pusher,
             animate,
@@ -52912,7 +53661,7 @@ $.fn.sidebar = function(parameters) {
               $transition.off(transitionEvent + elementNamespace, transitionEnd);
               module.remove.animating();
               module.bind.scrollLock();
-              $.proxy(callback, element)();
+              callback.call(element);
             }
           };
           $transition.off(transitionEvent + elementNamespace);
@@ -52925,7 +53674,7 @@ $.fn.sidebar = function(parameters) {
             transition = module.get.transition(),
             $transition = (transition == 'safe')
               ? $context
-              : (transition == 'overlay' || module.othersVisible())
+              : (transition == 'overlay' || module.othersActive())
                 ? $module
                 : $pusher,
             animate,
@@ -52937,6 +53686,7 @@ $.fn.sidebar = function(parameters) {
           ;
           module.verbose('Removing context push state', module.get.direction());
 
+          module.set.transition();
           module.unbind.clickaway();
           module.unbind.scrollLock();
 
@@ -52956,7 +53706,7 @@ $.fn.sidebar = function(parameters) {
               if(transition == 'scale down' || (settings.returnScroll && module.is.mobile()) ) {
                 module.scrollBack();
               }
-              $.proxy(callback, element)();
+              callback.call(element);
             }
           };
           $transition.off(transitionEvent + elementNamespace);
@@ -52988,7 +53738,7 @@ $.fn.sidebar = function(parameters) {
             .animate(properties, settings.duration, settings.easing, function() {
               module.remove.animating();
               module.bind.clickaway();
-              $.proxy(callback, module)();
+              callback.call(element);
             })
           ;
         },
@@ -53008,14 +53758,14 @@ $.fn.sidebar = function(parameters) {
           module.unbind.clickaway();
           module.set.animating();
           module.remove.visible();
-          if(settings.dimPage && !module.othersVisible()) {
+          if(settings.dimPage && !module.othersActive()) {
             $pusher.removeClass(className.dimmed);
           }
           $context
             .css('position', 'relative')
             .animate(properties, settings.duration, settings.easing, function() {
               module.remove.animating();
-              $.proxy(callback, module)();
+              callback.call(element);
             })
           ;
         },
@@ -53072,7 +53822,7 @@ $.fn.sidebar = function(parameters) {
 
           bodyCSS: function() {
             module.debug('Removing body css styles', $style);
-            if($style.size() > 0) {
+            if($style && $style.length > 0) {
               $style.remove();
             }
           },
@@ -53236,6 +53986,9 @@ $.fn.sidebar = function(parameters) {
           },
           animating: function() {
             return $context.hasClass(className.animating);
+          },
+          rtl: function () {
+            return $module.css('direction') == 'rtl';
           }
         },
 
@@ -53449,6 +54202,7 @@ $.fn.sidebar.settings = {
   dimPage           : true,
   scrollLock        : false,
   returnScroll      : false,
+  delaySetup        : false,
 
   useLegacy         : 'auto',
   duration          : 500,
@@ -53578,7 +54332,7 @@ $.fn.sticky = function(parameters) {
           else {
             $context = $container;
           }
-          if($context.size() === 0) {
+          if($context.length === 0) {
             module.error(error.invalidContext, settings.context, $module);
             return;
           }
@@ -53665,7 +54419,7 @@ $.fn.sticky = function(parameters) {
           scroll: function() {
             requestAnimationFrame(function() {
               module.stick();
-              $.proxy(settings.onScroll, element)();
+              settings.onScroll.call(element);
             });
           }
         },
@@ -53677,7 +54431,7 @@ $.fn.sticky = function(parameters) {
           }
           module.save.positions();
           module.stick();
-          $.proxy(settings.onReposition, element)();
+          settings.onReposition.call(element);
         },
 
         supports: {
@@ -53736,7 +54490,7 @@ $.fn.sticky = function(parameters) {
               }
             };
             module.set.containerSize();
-            module.set.size();
+            module.set.length;
             module.stick();
             module.debug('Caching element positions', module.cache);
           }
@@ -53968,8 +54722,8 @@ $.fn.sticky = function(parameters) {
             .addClass(className.bound)
             .addClass(className.top)
           ;
-          $.proxy(settings.onTop, element)();
-          $.proxy(settings.onUnstick, element)();
+          settings.onTop.call(element);
+          settings.onUnstick.call(element);
         },
         bindBottom: function() {
           module.debug('Binding element to bottom of parent container');
@@ -53983,8 +54737,8 @@ $.fn.sticky = function(parameters) {
             .addClass(className.bound)
             .addClass(className.bottom)
           ;
-          $.proxy(settings.onBottom, element)();
-          $.proxy(settings.onUnstick, element)();
+          settings.onBottom.call(element);
+          settings.onUnstick.call(element);
         },
 
         setInitialPosition: function() {
@@ -54003,7 +54757,7 @@ $.fn.sticky = function(parameters) {
             .addClass(className.fixed)
             .addClass(className.top)
           ;
-          $.proxy(settings.onStick, element)();
+          settings.onStick.call(element);
         },
 
         fixBottom: function() {
@@ -54016,7 +54770,7 @@ $.fn.sticky = function(parameters) {
             .addClass(className.fixed)
             .addClass(className.bottom)
           ;
-          $.proxy(settings.onStick, element)();
+          settings.onStick.call(element);
         },
 
         unbind: function() {
@@ -54037,7 +54791,7 @@ $.fn.sticky = function(parameters) {
             .removeClass(className.top)
             .removeClass(className.bottom)
           ;
-          $.proxy(settings.onUnstick, this)();
+          settings.onUnstick.call(element);
         },
 
         reset: function() {
@@ -54380,7 +55134,7 @@ $.fn.tab = function(parameters) {
 
           // determine tab context
           if(settings.context === 'parent') {
-            if($module.closest(selector.ui).size() > 0) {
+            if($module.closest(selector.ui).length > 0) {
               $reference = $module.closest(selector.ui);
               module.verbose('Using closest UI element for determining parent', $reference);
             }
@@ -54579,8 +55333,8 @@ $.fn.tab = function(parameters) {
                   firstLoad = false;
                   module.cache.add(tabPath, $tab.html());
                   module.activate.all(currentPath);
-                  $.proxy(settings.onTabInit, $tab)(currentPath, parameterArray, historyEvent);
-                  $.proxy(settings.onTabLoad, $tab)(currentPath, parameterArray, historyEvent);
+                  settings.onTabInit.call($tab, currentPath, parameterArray, historyEvent);
+                  settings.onTabLoad.call($tab, currentPath, parameterArray, historyEvent);
                 }
                 return false;
               }
@@ -54590,9 +55344,9 @@ $.fn.tab = function(parameters) {
                 if( !module.cache.read(currentPath) ) {
                   module.cache.add(currentPath, true);
                   module.debug('First time tab loaded calling tab init');
-                  $.proxy(settings.onTabInit, $tab)(currentPath, parameterArray, historyEvent);
+                  settings.onTabInit.call($tab, currentPath, parameterArray, historyEvent);
                 }
-                $.proxy(settings.onTabLoad, $tab)(currentPath, parameterArray, historyEvent);
+                settings.onTabLoad.call($tab, currentPath, parameterArray, historyEvent);
               }
             }
             else if(tabPath.search('/') == -1 && tabPath !== '') {
@@ -54601,13 +55355,13 @@ $.fn.tab = function(parameters) {
               currentPath = $anchor.closest('[data-tab]').data('tab');
               $tab        = module.get.tabElement(currentPath);
               // if anchor exists use parent tab
-              if($anchor && $anchor.size() > 0 && currentPath) {
+              if($anchor && $anchor.length > 0 && currentPath) {
                 module.debug('No tab found, but deep anchor link present, opening parent tab');
                 module.activate.all(currentPath);
                 if( !module.cache.read(currentPath) ) {
                   module.cache.add(currentPath, true);
                   module.debug('First time tab loaded calling tab init');
-                  $.proxy(settings.onTabInit, $tab)(currentPath, parameterArray, historyEvent);
+                  settings.onTabInit.call($tab, currentPath, parameterArray, historyEvent);
                 }
                 return false;
               }
@@ -54637,8 +55391,8 @@ $.fn.tab = function(parameters) {
                   else {
                     module.debug('Content loaded in background', tabPath);
                   }
-                  $.proxy(settings.onTabInit, $tab)(tabPath, parameterArray, historyEvent);
-                  $.proxy(settings.onTabLoad, $tab)(tabPath, parameterArray, historyEvent);
+                  settings.onTabInit.call($tab, tabPath, parameterArray, historyEvent);
+                  settings.onTabLoad.call($tab, tabPath, parameterArray, historyEvent);
                 },
                 urlData: { tab: fullTabPath }
               },
@@ -54655,7 +55409,7 @@ $.fn.tab = function(parameters) {
               module.debug('Showing existing content', fullTabPath);
               module.content.update(tabPath, cachedContent);
               module.activate.tab(tabPath);
-              $.proxy(settings.onTabLoad, $tab)(tabPath, parameterArray, historyEvent);
+              settings.onTabLoad.call($tab, tabPath, parameterArray, historyEvent);
             }
             else if(existingRequest) {
               module.debug('Content is already loading', fullTabPath);
@@ -54733,7 +55487,7 @@ $.fn.tab = function(parameters) {
         is: {
           tab: function(tabName) {
             return (tabName !== undefined)
-              ? ( module.get.tabElement(tabName).size() > 0 )
+              ? ( module.get.tabElement(tabName).length > 0 )
               : false
             ;
           }
@@ -54785,7 +55539,7 @@ $.fn.tab = function(parameters) {
             lastTab        = module.utilities.last(tabPathArray);
             $fullPathTab   = $tabs.filter('[data-' + metadata.tab + '="' + lastTab + '"]');
             $simplePathTab = $tabs.filter('[data-' + metadata.tab + '="' + tabPath + '"]');
-            return ($fullPathTab.size() > 0)
+            return ($fullPathTab.length > 0)
               ? $fullPathTab
               : $simplePathTab
             ;
@@ -55180,7 +55934,7 @@ $.fn.transition = function() {
             $parentElement = $module.parent(),
             $nextElement = $module.next()
           ;
-          if($nextElement.size() === 0) {
+          if($nextElement.length === 0) {
             $module.detach().appendTo($parentElement);
           }
           else {
@@ -55252,14 +56006,14 @@ $.fn.transition = function() {
               module.verbose('Animation is outward, hiding element');
               module.restore.conditions();
               module.hide();
-              $.proxy(settings.onHide, this)();
+              settings.onHide.call(this);
             }
             else if( module.is.inward() ) {
               module.verbose('Animation is outward, showing element');
               module.restore.conditions();
               module.show();
               module.set.display();
-              $.proxy(settings.onShow, this)();
+              settings.onShow.call(this);
             }
             else {
               module.restore.conditions();
@@ -55267,7 +56021,7 @@ $.fn.transition = function() {
             module.remove.animation();
             module.remove.animating();
           }
-          $.proxy(settings.onComplete, this)();
+          settings.onComplete.call(this);
         },
 
         has: {
@@ -55310,7 +56064,7 @@ $.fn.transition = function() {
               module.add.failSafe();
             }
             module.set.duration(settings.duration);
-            $.proxy(settings.onStart, this)();
+            settings.onStart.call(this);
             module.debug('Starting tween', animation, $module.attr('class'));
           },
           duration: function(animationName, duration) {
@@ -55704,7 +56458,7 @@ $.fn.transition = function() {
           occuring: function(animation) {
             animation = animation || settings.animation;
             animation = animation.replace(' ', '.');
-            return ( $module.filter(animation).size() > 0 );
+            return ( $module.filter(animation).length > 0 );
           },
           visible: function() {
             return $module.is(':visible');
@@ -55835,8 +56589,8 @@ $.fn.transition = function() {
             if(moduleSelector) {
               title += ' \'' + moduleSelector + '\'';
             }
-            if($allModules.size() > 1) {
-              title += ' ' + '(' + $allModules.size() + ')';
+            if($allModules.length > 1) {
+              title += ' ' + '(' + $allModules.length + ')';
             }
             if( (console.group !== undefined || console.table !== undefined) && performance.length > 0) {
               console.groupCollapsed(title);
@@ -55948,7 +56702,7 @@ $.fn.transition.settings = {
   onHide       : function() {},
 
   // whether timeout should be used to ensure callback fires in cases animationend does not
-  useFailSafe  : false,
+  useFailSafe  : true,
 
   // whether EXACT animation can occur twice in a row
   allowRepeats : false,
@@ -56199,14 +56953,14 @@ $.fn.video = function(parameters) {
               }
               if(source == 'vimeo') {
                 html = ''
-                  + '<iframe src="http://player.vimeo.com/video/' + id + '?=' + module.generate.url(source) + '"'
+                  + '<iframe src="//player.vimeo.com/video/' + id + '?=' + module.generate.url(source) + '"'
                   + ' width="100%" height="100%"'
                   + ' frameborder="0" webkitAllowFullScreen mozallowfullscreen allowFullScreen></iframe>'
                 ;
               }
               else if(source == 'youtube') {
                 html = ''
-                  + '<iframe src="http://www.youtube.com/embed/' + id + '?=' + module.generate.url(source) + '"'
+                  + '<iframe src="//www.youtube.com/embed/' + id + '?=' + module.generate.url(source) + '"'
                   + ' width="100%" height="100%"'
                   + ' frameborder="0" webkitAllowFullScreen mozallowfullscreen allowFullScreen></iframe>'
                 ;
@@ -56360,8 +57114,8 @@ $.fn.video = function(parameters) {
             if(moduleSelector) {
               title += ' \'' + moduleSelector + '\'';
             }
-            if($allModules.size() > 1) {
-              title += ' ' + '(' + $allModules.size() + ')';
+            if($allModules.length > 1) {
+              title += ' ' + '(' + $allModules.length + ')';
             }
             if( (console.group !== undefined || console.table !== undefined) && performance.length > 0) {
               console.groupCollapsed(title);
@@ -56733,7 +57487,7 @@ $.api = $.fn.api = function(parameters) {
 
         is: {
           disabled: function() {
-            return ($module.filter(settings.filter).size() > 0);
+            return ($module.filter(settings.filter).length > 0);
           },
           loading: function() {
             return (module.request && module.request.state() == 'pending');
@@ -56877,7 +57631,7 @@ $.api = $.fn.api = function(parameters) {
           request: {
             complete: function(response) {
               module.remove.loading();
-              $.proxy(settings.onComplete, context)(response, $module);
+              settings.onComplete.call(context, response, $module);
             },
             done: function(response) {
               module.debug('API Response Received', response);
@@ -56885,19 +57639,19 @@ $.api = $.fn.api = function(parameters) {
                 if( $.isFunction(settings.successTest) ) {
                   module.debug('Checking JSON returned success', settings.successTest, response);
                   if( settings.successTest(response) ) {
-                    $.proxy(settings.onSuccess, context)(response, $module);
+                    settings.onSuccess.call(context, response, $module);
                   }
                   else {
                     module.debug('JSON test specified by user and response failed', response);
-                    $.proxy(settings.onFailure, context)(response, $module);
+                    settings.onFailure.call(context, response, $module);
                   }
                 }
                 else {
-                  $.proxy(settings.onSuccess, context)(response, $module);
+                  settings.onSuccess.call(context, response, $module);
                 }
               }
               else {
-                $.proxy(settings.onSuccess, context)(response, $module);
+                settings.onSuccess.call(context, response, $module);
               }
             },
             error: function(xhr, status, httpMessage) {
@@ -56936,10 +57690,10 @@ $.api = $.fn.api = function(parameters) {
                     setTimeout(module.remove.error, settings.errorDuration);
                   }
                   module.debug('API Request error:', errorMessage);
-                  $.proxy(settings.onError, context)(errorMessage, context);
+                  settings.onError.call(context, errorMessage, $module);
                 }
                 else {
-                  $.proxy(settings.onAbort, context)(errorMessage, context);
+                  settings.onAbort.call(context, errorMessage, $module);
                   module.debug('Request Aborted (Most likely caused by page change or CORS Policy)', status, httpMessage);
                 }
               }
@@ -56997,7 +57751,7 @@ $.api = $.fn.api = function(parameters) {
             var
               runSettings
             ;
-            runSettings = $.proxy(settings.beforeSend, $module)(settings);
+            runSettings = settings.beforeSend.call($module, settings);
             if(runSettings) {
               if(runSettings.success !== undefined) {
                 module.debug('Legacy success callback detected', runSettings);
@@ -57536,7 +58290,7 @@ $.fn.form = function(fields, parameters) {
                   .blur()
                 ;
               }
-              if(!event.ctrlKey && key == keyCode.enter && $field.is(selector.input) && $field.not(selector.checkbox).size() > 0 ) {
+              if(!event.ctrlKey && key == keyCode.enter && $field.is(selector.input) && $field.not(selector.checkbox).length > 0 ) {
                 module.debug('Enter key pressed, submitting form');
                 $submit
                   .addClass(className.down)
@@ -57597,13 +58351,13 @@ $.fn.form = function(fields, parameters) {
           },
           field: function(identifier) {
             module.verbose('Finding field with identifier', identifier);
-            if( $field.filter('#' + identifier).size() > 0 ) {
+            if( $field.filter('#' + identifier).length > 0 ) {
               return $field.filter('#' + identifier);
             }
-            else if( $field.filter('[name="' + identifier +'"]').size() > 0 ) {
+            else if( $field.filter('[name="' + identifier +'"]').length > 0 ) {
               return $field.filter('[name="' + identifier +'"]');
             }
-            else if( $field.filter('[data-' + metadata.validate + '="'+ identifier +'"]').size() > 0 ) {
+            else if( $field.filter('[data-' + metadata.validate + '="'+ identifier +'"]').length > 0 ) {
               return $field.filter('[data-' + metadata.validate + '="'+ identifier +'"]');
             }
             return $('<input/>');
@@ -57625,13 +58379,13 @@ $.fn.form = function(fields, parameters) {
 
           field: function(identifier) {
             module.verbose('Checking for existence of a field with identifier', identifier);
-            if( $field.filter('#' + identifier).size() > 0 ) {
+            if( $field.filter('#' + identifier).length > 0 ) {
               return true;
             }
-            else if( $field.filter('[name="' + identifier +'"]').size() > 0 ) {
+            else if( $field.filter('[name="' + identifier +'"]').length > 0 ) {
               return true;
             }
-            else if( $field.filter('[data-' + metadata.validate + '="'+ identifier +'"]').size() > 0 ) {
+            else if( $field.filter('[data-' + metadata.validate + '="'+ identifier +'"]').length > 0 ) {
               return true;
             }
             return false;
@@ -57644,8 +58398,8 @@ $.fn.form = function(fields, parameters) {
             var
               $field       = module.get.field(identifier),
               $fieldGroup  = $field.closest($group),
-              $prompt      = $fieldGroup.find(selector.prompt),
-              promptExists = ($prompt.size() !== 0)
+              $prompt      = $fieldGroup.children(selector.prompt),
+              promptExists = ($prompt.length !== 0)
             ;
             errors = (typeof errors == 'string')
               ? [errors]
@@ -57695,7 +58449,7 @@ $.fn.form = function(fields, parameters) {
             var
               $field      = module.get.field(field.identifier),
               $fieldGroup = $field.closest($group),
-              $prompt     = $fieldGroup.find(selector.prompt)
+              $prompt     = $fieldGroup.children(selector.prompt)
             ;
             $fieldGroup
               .removeClass(className.error)
@@ -57750,7 +58504,7 @@ $.fn.form = function(fields, parameters) {
             if(allValid) {
               module.debug('Form has no validation errors, submitting');
               module.set.success();
-              return $.proxy(settings.onSuccess, element)(event);
+              return settings.onSuccess.call(element, event);
             }
             else {
               module.debug('Form has errors');
@@ -57762,7 +58516,7 @@ $.fn.form = function(fields, parameters) {
               if($module.data('moduleApi') !== undefined) {
                 event.stopImmediatePropagation();
               }
-              return $.proxy(settings.onFailure, element)(formErrors);
+              return settings.onFailure.call(element, formErrors);
             }
           },
 
@@ -57792,12 +58546,12 @@ $.fn.form = function(fields, parameters) {
             }
             if(fieldValid) {
               module.remove.prompt(field, fieldErrors);
-              $.proxy(settings.onValid, $field)();
+              settings.onValid.call($field);
             }
             else {
               formErrors = formErrors.concat(fieldErrors);
               module.add.prompt(field.identifier, fieldErrors);
-              $.proxy(settings.onInvalid, $field)(fieldErrors);
+              settings.onInvalid.call($field, fieldErrors);
               return false;
             }
             return true;
@@ -57820,11 +58574,11 @@ $.fn.form = function(fields, parameters) {
             if(bracket !== undefined && bracket !== null) {
               ancillary    = '' + bracket[1];
               functionType = type.replace(bracket[0], '');
-              isValid      = $.proxy(settings.rules[functionType], element)(value, ancillary);
+              isValid      = settings.rules[functionType].call(element, value, ancillary);
             }
             // normal notation
             else {
-              isValid = $.proxy(settings.rules[type], $field)(value);
+              isValid = settings.rules[type].call($field, value);
             }
             return isValid;
           }
@@ -57914,8 +58668,8 @@ $.fn.form = function(fields, parameters) {
             if(moduleSelector) {
               title += ' \'' + moduleSelector + '\'';
             }
-            if($allModules.size() > 1) {
-              title += ' ' + '(' + $allModules.size() + ')';
+            if($allModules.length > 1) {
+              title += ' ' + '(' + $allModules.length + ')';
             }
             if( (console.group !== undefined || console.table !== undefined) && performance.length > 0) {
               console.groupCollapsed(title);
@@ -58044,7 +58798,7 @@ $.fn.form.settings = {
     group   : '.field',
     checkbox: 'input[type="checkbox"], input[type="radio"]',
     input   : 'input',
-    prompt  : '.prompt',
+    prompt  : '.prompt.label',
     submit  : '.submit'
   },
 
@@ -58082,7 +58836,7 @@ $.fn.form.settings = {
 
     // checkbox checked
     checked: function() {
-      return ($(this).filter(':checked').size() > 0);
+      return ($(this).filter(':checked').length > 0);
     },
 
     // value contains (text)
@@ -58156,13 +58910,13 @@ $.fn.form.settings = {
         $form = $(this),
         matchingValue
       ;
-      if($form.find('#' + fieldIdentifier).size() > 0) {
+      if($form.find('#' + fieldIdentifier).length > 0) {
         matchingValue = $form.find('#' + fieldIdentifier).val();
       }
-      else if($form.find('[name="' + fieldIdentifier +'"]').size() > 0) {
+      else if($form.find('[name="' + fieldIdentifier +'"]').length > 0) {
         matchingValue = $form.find('[name="' + fieldIdentifier + '"]').val();
       }
-      else if( $form.find('[data-validate="'+ fieldIdentifier +'"]').size() > 0 ) {
+      else if( $form.find('[data-validate="'+ fieldIdentifier +'"]').length > 0 ) {
         matchingValue = $form.find('[data-validate="'+ fieldIdentifier +'"]').val();
       }
       return (matchingValue !== undefined)
@@ -58451,7 +59205,7 @@ $.fn.state = function(parameters) {
             if(settings.sync) {
               module.sync();
             }
-            $.proxy(settings.onChange, element)();
+            settings.onChange.call(element);
           },
 
           text: function() {
@@ -58486,24 +59240,24 @@ $.fn.state = function(parameters) {
         },
 
         activate: function() {
-          if( $.proxy(settings.activateTest, element)() ) {
+          if( settings.activateTest.call(element) ) {
             module.debug('Setting state to active');
             $module
               .addClass(className.active)
             ;
             module.update.text(text.active);
-            $.proxy(settings.onActivate, element)();
+            settings.onActivate.call(element);
           }
         },
 
         deactivate: function() {
-          if($.proxy(settings.deactivateTest, element)() ) {
+          if( settings.deactivateTest.call(element) ) {
             module.debug('Setting state to inactive');
             $module
               .removeClass(className.active)
             ;
             module.update.text(text.inactive);
-            $.proxy(settings.onDeactivate, element)();
+            settings.onDeactivate.call(element);
           }
         },
 
@@ -58546,7 +59300,7 @@ $.fn.state = function(parameters) {
             module.update.text(text);
             setTimeout(function(){
               module.update.text(previousText);
-              $.proxy(callback, element)();
+              callback.call(element);
             }, duration);
           }
         },
@@ -59131,7 +59885,7 @@ $.fn.visibility = function(parameters) {
           module.reset();
           module.save.position();
           module.checkVisibility();
-          $.proxy(settings.onRefresh, element)();
+          settings.onRefresh.call(element);
         },
 
         reset: function() {
@@ -59419,11 +60173,11 @@ $.fn.visibility = function(parameters) {
           if(callback) {
             if(settings.continuous) {
               module.debug('Callback being called continuously', callbackName, calculations);
-              $.proxy(callback, element)(calculations, screen);
+              callback.call(element, calculations, screen);
             }
             else if(!module.get.occurred(callbackName)) {
               module.debug('Conditions met', callbackName, calculations);
-              $.proxy(callback, element)(calculations, screen);
+              callback.call(element, calculations, screen);
             }
           }
           module.save.occurred(callbackName);
@@ -59859,7 +60613,7 @@ $.fn.visibility.settings = {
 
 })( jQuery, window , document );
 
-},{}],343:[function(require,module,exports){
+},{}],352:[function(require,module,exports){
 "use strict";
 var React        = require('react/addons');
 var RouteStore   = require('./stores/RouteStore.js');
@@ -59910,7 +60664,7 @@ module.exports = React.createClass({displayName: "exports",
 
 });
 
-},{"./pages/IndexPage.jsx":351,"./stores/RouteStore.js":353,"react/addons":181}],344:[function(require,module,exports){
+},{"./pages/IndexPage.jsx":361,"./stores/RouteStore.js":363,"react/addons":190}],353:[function(require,module,exports){
 "use strict";
 var AppDispatcher  = require('../dispatcher/AppDispatcher');
 var RouteConstants = require('../constants/RouteConstants');
@@ -59926,7 +60680,7 @@ var RouteActions = {
 
 module.exports = RouteActions;
 
-},{"../constants/RouteConstants":348,"../dispatcher/AppDispatcher":349}],345:[function(require,module,exports){
+},{"../constants/RouteConstants":358,"../dispatcher/AppDispatcher":359}],354:[function(require,module,exports){
 "use strict";
 var React = require('react/addons');
 var Highlight = require('highlight.js');
@@ -59960,7 +60714,7 @@ module.exports = React.createClass({displayName: "exports",
   }
 })
 
-},{"highlight.js":11,"react/addons":181}],346:[function(require,module,exports){
+},{"highlight.js":11,"react/addons":190}],355:[function(require,module,exports){
 "use strict";
 var React = require('react/addons');
 var CodeBlock = require('./CodeBlock.jsx');
@@ -60035,7 +60789,26 @@ module.exports = React.createClass({displayName: "exports",
   }
 })
 
-},{"./CodeBlock.jsx":345,"react-semantify":155,"react/addons":181}],347:[function(require,module,exports){
+},{"./CodeBlock.jsx":354,"react-semantify":164,"react/addons":190}],356:[function(require,module,exports){
+"use strict";
+
+var React            = require('react/addons');
+var GitHubForkRibbon = require('react-github-fork-ribbon');
+
+module.exports = React.createClass({displayName: "exports",
+
+  render: function () {
+    return(
+      React.createElement(GitHubForkRibbon, {position: "right", 
+                        href: "//github.com/jessy1092/react-semantify", 
+                        target: "_blank"}, 
+        "Fork me on GitHub"
+      )
+    );
+  }
+});
+
+},{"react-github-fork-ribbon":132,"react/addons":190}],357:[function(require,module,exports){
 "use strict";
 var React       = require('react/addons');
 var Semantify   = require('react-semantify');
@@ -60097,7 +60870,7 @@ module.exports = React.createClass({displayName: "exports",
 
 });
 
-},{"../actions/RouteActions.js":344,"../stores/RouteStore.js":353,"react-semantify":155,"react/addons":181}],348:[function(require,module,exports){
+},{"../actions/RouteActions.js":353,"../stores/RouteStore.js":363,"react-semantify":164,"react/addons":190}],358:[function(require,module,exports){
 "use strict";
 
 module.exports = {
@@ -60106,13 +60879,13 @@ module.exports = {
   ROUTE_EVENT: 'ROUTE_EVENT'
 };
 
-},{}],349:[function(require,module,exports){
+},{}],359:[function(require,module,exports){
 "use strict";
 var Dispatcher = require('flux').Dispatcher;
 
 module.exports = new Dispatcher();
 
-},{"flux":7}],350:[function(require,module,exports){
+},{"flux":7}],360:[function(require,module,exports){
 "use strict";
 var React         = require('react/addons');
 var Semantify     = require('react-semantify');
@@ -60171,7 +60944,7 @@ module.exports = React.createClass({displayName: "exports",
   }
 });
 
-},{"../components/ExampleBlock.jsx":346,"react-semantify":155,"react/addons":181}],351:[function(require,module,exports){
+},{"../components/ExampleBlock.jsx":355,"react-semantify":164,"react/addons":190}],361:[function(require,module,exports){
 "use strict";
 var React     = require('react/addons');
 var Semantify = require('react-semantify');
@@ -60325,7 +61098,7 @@ module.exports = React.createClass({displayName: "exports",
   }
 });
 
-},{"../components/CodeBlock.jsx":345,"react-semantify":155,"react/addons":181}],352:[function(require,module,exports){
+},{"../components/CodeBlock.jsx":354,"react-semantify":164,"react/addons":190}],362:[function(require,module,exports){
 "use strict";
 module.exports = [
   {
@@ -60337,7 +61110,7 @@ module.exports = [
   }
 ];
 
-},{"../pages/ButtonPage.jsx":350,"../pages/IndexPage.jsx":351}],353:[function(require,module,exports){
+},{"../pages/ButtonPage.jsx":360,"../pages/IndexPage.jsx":361}],363:[function(require,module,exports){
 "use strict";
 var AppDispatcher  = require('../dispatcher/AppDispatcher');
 var EventEmitter   = require('events').EventEmitter;
@@ -60391,4 +61164,4 @@ AppDispatcher.register(function (action) {
 
 module.exports = routeStore;
 
-},{"../constants/RouteConstants":348,"../dispatcher/AppDispatcher":349,"./RouteConfig.js":352,"events":2,"util":6}]},{},[1]);
+},{"../constants/RouteConstants":358,"../dispatcher/AppDispatcher":359,"./RouteConfig.js":362,"events":2,"util":6}]},{},[1]);
