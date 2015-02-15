@@ -31,7 +31,7 @@ $(".ui.launch.button").on("click", function () {
 });
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"../../src/App.jsx":352,"../../src/actions/RouteActions.js":353,"../../src/components/GitHubForkRibbon.jsx":356,"../../src/components/Sidebar.jsx":357,"jquery":124,"react/addons":190,"semantic-ui/dist/semantic.js":351}],2:[function(require,module,exports){
+},{"../../src/App.jsx":352,"../../src/actions/RouteActions.js":353,"../../src/components/GitHubForkRibbon.jsx":356,"../../src/components/Sidebar.jsx":358,"jquery":124,"react/addons":190,"semantic-ui/dist/semantic.js":351}],2:[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -61360,6 +61360,8 @@ var RouteStore = _interopRequire(require("./stores/RouteStore.js"));
 var IndexPage = _interopRequire(require("./pages/IndexPage.jsx"));
 
 module.exports = React.createClass({
+  displayName: "App",
+
 
   getInitialState: function getInitialState() {
     return {
@@ -61400,19 +61402,23 @@ module.exports = React.createClass({
 
 });
 
-},{"./pages/IndexPage.jsx":361,"./stores/RouteStore.js":363,"react/addons":190}],353:[function(require,module,exports){
+},{"./pages/IndexPage.jsx":362,"./stores/RouteStore.js":364,"react/addons":190}],353:[function(require,module,exports){
 "use strict";
 
 var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
 
 var _prototypeProperties = function (child, staticProps, instanceProps) { if (staticProps) Object.defineProperties(child, staticProps); if (instanceProps) Object.defineProperties(child.prototype, instanceProps); };
 
+var _classCallCheck = function (instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } };
+
 var AppDispatcher = _interopRequire(require("../dispatcher/AppDispatcher"));
 
 var RouteConstants = _interopRequire(require("../constants/RouteConstants"));
 
 var RouteActions = (function () {
-  function RouteActions() {}
+  function RouteActions() {
+    _classCallCheck(this, RouteActions);
+  }
 
   _prototypeProperties(RouteActions, null, {
     updatePath: {
@@ -61434,7 +61440,7 @@ var RouteActions = (function () {
 
 module.exports = new RouteActions();
 
-},{"../constants/RouteConstants":358,"../dispatcher/AppDispatcher":359}],354:[function(require,module,exports){
+},{"../constants/RouteConstants":359,"../dispatcher/AppDispatcher":360}],354:[function(require,module,exports){
 "use strict";
 
 var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
@@ -61444,6 +61450,8 @@ var React = _interopRequire(require("react/addons"));
 var Highlight = _interopRequire(require("highlight.js"));
 
 module.exports = React.createClass({
+  displayName: "CodeBlock",
+
 
   componentDidMount: function componentDidMount() {
     this._highlightCode();
@@ -61493,6 +61501,8 @@ var Header = Semantify.Header;
 var Segment = Semantify.Segment;
 var Label = Semantify.Label;
 module.exports = React.createClass({
+  displayName: "ExampleBlock",
+
 
   getInitialState: function getInitialState() {
     return {
@@ -61510,8 +61520,9 @@ module.exports = React.createClass({
   },
 
   render: function render() {
-    var onClick = this.props.onClick;
-    var className = this.props.className;
+    var _props = this.props;
+    var onClick = _props.onClick;
+    var className = _props.className;
 
 
     return React.createElement(
@@ -61582,6 +61593,8 @@ var React = _interopRequire(require("react/addons"));
 var GitHubForkRibbon = _interopRequire(require("react-github-fork-ribbon"));
 
 module.exports = React.createClass({
+  displayName: "GitHubForkRibbon",
+
 
   render: function render() {
     return React.createElement(
@@ -61603,6 +61616,43 @@ var React = _interopRequire(require("react/addons"));
 
 var Semantify = _interopRequire(require("react-semantify"));
 
+var Segment = Semantify.Segment;
+var Header = Semantify.Header;
+module.exports = React.createClass({
+  displayName: "PageTitle",
+
+
+  render: function render() {
+    return React.createElement(
+      Segment,
+      { className: "header" },
+      React.createElement(
+        "div",
+        { className: "container" },
+        React.createElement(
+          Header,
+          { className: "huge" },
+          this.props.title,
+          React.createElement(
+            Header,
+            { className: "sub" },
+            this.props.children
+          )
+        )
+      )
+    );
+  }
+});
+
+},{"react-semantify":164,"react/addons":190}],358:[function(require,module,exports){
+"use strict";
+
+var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
+
+var React = _interopRequire(require("react/addons"));
+
+var Semantify = _interopRequire(require("react-semantify"));
+
 var RouteStore = _interopRequire(require("../stores/RouteStore.js"));
 
 var RouteActions = _interopRequire(require("../actions/RouteActions.js"));
@@ -61611,6 +61661,8 @@ var Menu = Semantify.Menu;
 var Item = Semantify.Item;
 var Header = Semantify.Header;
 module.exports = React.createClass({
+  displayName: "Sidebar",
+
 
   getInitialState: function getInitialState() {
     return {
@@ -61668,7 +61720,7 @@ module.exports = React.createClass({
 
 });
 
-},{"../actions/RouteActions.js":353,"../stores/RouteStore.js":363,"react-semantify":164,"react/addons":190}],358:[function(require,module,exports){
+},{"../actions/RouteActions.js":353,"../stores/RouteStore.js":364,"react-semantify":164,"react/addons":190}],359:[function(require,module,exports){
 "use strict";
 
 module.exports = {
@@ -61677,13 +61729,13 @@ module.exports = {
   ROUTE_EVENT: "ROUTE_EVENT"
 };
 
-},{}],359:[function(require,module,exports){
+},{}],360:[function(require,module,exports){
 "use strict";
-var Dispatcher = require("flux").Dispatcher;
 
+var Dispatcher = require("flux").Dispatcher;
 module.exports = new Dispatcher();
 
-},{"flux":7}],360:[function(require,module,exports){
+},{"flux":7}],361:[function(require,module,exports){
 "use strict";
 
 var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
@@ -61694,33 +61746,23 @@ var Semantify = _interopRequire(require("react-semantify"));
 
 var ExampleBlock = _interopRequire(require("../components/ExampleBlock.jsx"));
 
+var PageTitle = _interopRequire(require("../components/PageTitle.jsx"));
+
 var Button = Semantify.Button;
 var Divider = Semantify.Divider;
 var Header = Semantify.Header;
-var Segment = Semantify.Segment;
 module.exports = React.createClass({
+  displayName: "ButtonPage",
+
 
   render: function render() {
     return React.createElement(
       "div",
       null,
       React.createElement(
-        Segment,
-        { className: "header" },
-        React.createElement(
-          "div",
-          { className: "container" },
-          React.createElement(
-            Header,
-            { className: "huge" },
-            "Button",
-            React.createElement(
-              Header,
-              { className: "sub" },
-              "A button indicates a possible user action"
-            )
-          )
-        )
+        PageTitle,
+        { title: "Button" },
+        "A button indicates a possible user action"
       ),
       React.createElement(
         "div",
@@ -61786,7 +61828,7 @@ module.exports = React.createClass({
   }
 });
 
-},{"../components/ExampleBlock.jsx":355,"react-semantify":164,"react/addons":190}],361:[function(require,module,exports){
+},{"../components/ExampleBlock.jsx":355,"../components/PageTitle.jsx":357,"react-semantify":164,"react/addons":190}],362:[function(require,module,exports){
 "use strict";
 
 var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
@@ -61797,6 +61839,8 @@ var Semantify = _interopRequire(require("react-semantify"));
 
 var CodeBlock = _interopRequire(require("../components/CodeBlock.jsx"));
 
+var PageTitle = _interopRequire(require("../components/PageTitle.jsx"));
+
 var Button = Semantify.Button;
 var Content = Semantify.Content;
 var Divider = Semantify.Divider;
@@ -61805,30 +61849,18 @@ var Icon = Semantify.Icon;
 var Items = Semantify.Items;
 var Item = Semantify.Item;
 var List = Semantify.List;
-var Segment = Semantify.Segment;
 module.exports = React.createClass({
+  displayName: "IndexPage",
+
 
   render: function render() {
     return React.createElement(
       "div",
       null,
       React.createElement(
-        Segment,
-        { className: "header" },
-        React.createElement(
-          "div",
-          { className: "container" },
-          React.createElement(
-            Header,
-            { className: "huge" },
-            "React-Semantify",
-            React.createElement(
-              Header,
-              { className: "sub" },
-              "Integrate Semantic-ui with react components"
-            )
-          )
-        )
+        PageTitle,
+        { title: "React-Semantify" },
+        "Integrate Semantic-ui with react components"
       ),
       React.createElement(
         "div",
@@ -61966,7 +61998,7 @@ module.exports = React.createClass({
   }
 });
 
-},{"../components/CodeBlock.jsx":354,"react-semantify":164,"react/addons":190}],362:[function(require,module,exports){
+},{"../components/CodeBlock.jsx":354,"../components/PageTitle.jsx":357,"react-semantify":164,"react/addons":190}],363:[function(require,module,exports){
 "use strict";
 
 module.exports = [{
@@ -61977,7 +62009,7 @@ module.exports = [{
   page: require("../pages/ButtonPage.jsx")
 }];
 
-},{"../pages/ButtonPage.jsx":360,"../pages/IndexPage.jsx":361}],363:[function(require,module,exports){
+},{"../pages/ButtonPage.jsx":361,"../pages/IndexPage.jsx":362}],364:[function(require,module,exports){
 "use strict";
 
 var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
@@ -61985,6 +62017,8 @@ var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["defau
 var _prototypeProperties = function (child, staticProps, instanceProps) { if (staticProps) Object.defineProperties(child, staticProps); if (instanceProps) Object.defineProperties(child.prototype, instanceProps); };
 
 var _inherits = function (subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) subClass.__proto__ = superClass; };
+
+var _classCallCheck = function (instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } };
 
 var AppDispatcher = _interopRequire(require("../dispatcher/AppDispatcher"));
 
@@ -62007,8 +62041,10 @@ function updatePath(pathName) {
 
 var RouteStore = (function (EventEmitter) {
   function RouteStore() {
-    if (Object.getPrototypeOf(RouteStore) !== null) {
-      Object.getPrototypeOf(RouteStore).apply(this, arguments);
+    _classCallCheck(this, RouteStore);
+
+    if (EventEmitter != null) {
+      EventEmitter.apply(this, arguments);
     }
   }
 
@@ -62063,4 +62099,4 @@ AppDispatcher.register(function (action) {
 
 module.exports = routeStore;
 
-},{"../constants/RouteConstants":358,"../dispatcher/AppDispatcher":359,"./RouteConfig.js":362,"events":2,"util":6}]},{},[1]);
+},{"../constants/RouteConstants":359,"../dispatcher/AppDispatcher":360,"./RouteConfig.js":363,"events":2,"util":6}]},{},[1]);
