@@ -61402,7 +61402,7 @@ module.exports = React.createClass({
 
 });
 
-},{"./pages/IndexPage.jsx":362,"./stores/RouteStore.js":364,"react/addons":190}],353:[function(require,module,exports){
+},{"./pages/IndexPage.jsx":363,"./stores/RouteStore.js":365,"react/addons":190}],353:[function(require,module,exports){
 "use strict";
 
 var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
@@ -61720,7 +61720,7 @@ module.exports = React.createClass({
 
 });
 
-},{"../actions/RouteActions.js":353,"../stores/RouteStore.js":364,"react-semantify":164,"react/addons":190}],359:[function(require,module,exports){
+},{"../actions/RouteActions.js":353,"../stores/RouteStore.js":365,"react-semantify":164,"react/addons":190}],359:[function(require,module,exports){
 "use strict";
 
 module.exports = {
@@ -61829,6 +61829,65 @@ module.exports = React.createClass({
 });
 
 },{"../components/ExampleBlock.jsx":355,"../components/PageTitle.jsx":357,"react-semantify":164,"react/addons":190}],362:[function(require,module,exports){
+"use strict";
+
+var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
+
+var React = _interopRequire(require("react/addons"));
+
+var Semantify = _interopRequire(require("react-semantify"));
+
+var ExampleBlock = _interopRequire(require("../components/ExampleBlock.jsx"));
+
+var PageTitle = _interopRequire(require("../components/PageTitle.jsx"));
+
+var Button = Semantify.Button;
+var Divider = Semantify.Divider;
+var Header = Semantify.Header;
+module.exports = React.createClass({
+  displayName: "DividerPage",
+
+
+  render: function render() {
+    return React.createElement(
+      "div",
+      null,
+      React.createElement(
+        PageTitle,
+        { title: "Divider" },
+        "A divider visually segments content into groups"
+      ),
+      React.createElement(
+        "div",
+        { className: "main container" },
+        React.createElement(
+          Header,
+          { className: "large dividing" },
+          "Type"
+        ),
+        React.createElement(
+          ExampleBlock,
+          { header: "Button",
+            sub: "A standard divider",
+            codeBlock: ["<p>This is the first region</p>", "<Divider/>", "<p>This is the second region</p>"].join("\n") },
+          React.createElement(
+            "p",
+            null,
+            "This is the first region"
+          ),
+          React.createElement(Divider, null),
+          React.createElement(
+            "p",
+            null,
+            "This is the second region"
+          )
+        )
+      )
+    );
+  }
+});
+
+},{"../components/ExampleBlock.jsx":355,"../components/PageTitle.jsx":357,"react-semantify":164,"react/addons":190}],363:[function(require,module,exports){
 "use strict";
 
 var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
@@ -61998,7 +62057,7 @@ module.exports = React.createClass({
   }
 });
 
-},{"../components/CodeBlock.jsx":354,"../components/PageTitle.jsx":357,"react-semantify":164,"react/addons":190}],363:[function(require,module,exports){
+},{"../components/CodeBlock.jsx":354,"../components/PageTitle.jsx":357,"react-semantify":164,"react/addons":190}],364:[function(require,module,exports){
 "use strict";
 
 module.exports = [{
@@ -62007,9 +62066,12 @@ module.exports = [{
 }, {
   name: "Button",
   page: require("../pages/ButtonPage.jsx")
+}, {
+  name: "Divider",
+  page: require("../pages/DividerPage.jsx")
 }];
 
-},{"../pages/ButtonPage.jsx":361,"../pages/IndexPage.jsx":362}],364:[function(require,module,exports){
+},{"../pages/ButtonPage.jsx":361,"../pages/DividerPage.jsx":362,"../pages/IndexPage.jsx":363}],365:[function(require,module,exports){
 "use strict";
 
 var _interopRequire = function (obj) { return obj && obj.__esModule ? obj["default"] : obj; };
@@ -62099,4 +62161,4 @@ AppDispatcher.register(function (action) {
 
 module.exports = routeStore;
 
-},{"../constants/RouteConstants":359,"../dispatcher/AppDispatcher":360,"./RouteConfig.js":363,"events":2,"util":6}]},{},[1]);
+},{"../constants/RouteConstants":359,"../dispatcher/AppDispatcher":360,"./RouteConfig.js":364,"events":2,"util":6}]},{},[1]);
